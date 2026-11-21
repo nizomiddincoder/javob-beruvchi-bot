@@ -3,10 +3,11 @@
 Mijoz biznes akkauntingizga yozganda bot uning matnini qidiruv API'ga yuboradi va:
 
 - **bir nechta mahsulot topilsa** — rasmlarini albom qilib yuboradi, ostidan bitta xabarda ro'yxat
-  (nomi, narxi, mavjudligi) va har bir mahsulotga buyurtma tugmasi. Telegram albomga tugma qo'shishga ruxsat
-  bermaydi, shuning uchun ro'yxat albomdan keyingi xabarda keladi;
-- **bitta mahsulot topilsa** — bitta xabar: rasmi, nomi, tavsifi, narxi, mavjudligi va `Buyurtma berish` tugmasi.
-  Tugmalar `https://t.me/<BUYURTMA_BOT_USERNAME>?start=product_<ID>` ga olib boradi;
+  (nomi, narxi, mavjudligi) va bitta `Buyurtma berish` tugmasi — u buyurtma botini ochadi
+  (`https://t.me/<BUYURTMA_BOT_USERNAME>`). Telegram albomga tugma qo'shishga ruxsat bermaydi, shuning uchun
+  ro'yxat albomdan keyingi xabarda keladi;
+- **bitta mahsulot topilsa** — bitta xabar: rasmi, nomi, tavsifi, narxi, mavjudligi va `Buyurtma berish` tugmasi,
+  u buyurtma botida shu mahsulotni ochadi (`https://t.me/<BUYURTMA_BOT_USERNAME>?start=product_<ID>`);
 - **hech narsa topilmasa** — mijozga "Operator tez orada javob beradi" deb yozadi va mijoz xabarini
   `ADMIN_CHAT_ID` ga yuboradi.
 

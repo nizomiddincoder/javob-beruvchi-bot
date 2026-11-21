@@ -187,7 +187,9 @@ const msg = (over = {}) => ({
   ...over,
 });
 
-test('handler: bir nechta mahsulot — bitta ro\'yxat xabari, har biriga tugma', async () => {
+const ONE_BOT_BUTTON = [[{ text: 'Buyurtma berish', url: 'https://t.me/shokoladchi_bot' }]];
+
+test('handler: bir nechta mahsulot — bitta ro\'yxat xabari va bitta tugma (botga)', async () => {
   const { sent, h } = setup({ products: normalizeResults(DB) });
   await h.handleBusinessMessage(msg());
   assert.equal(sent.length, 1);
@@ -196,9 +198,7 @@ test('handler: bir nechta mahsulot — bitta ro\'yxat xabari, har biriga tugma',
   assert.match(sent[0].text, /1\. <b>Kinder Bueno<\/b> — 12 500 so'm ✅/);
   assert.match(sent[0].text, /2\. <b>Snickers 50g<\/b> — 8 000 so'm ❌ hozircha yo'q/);
   assert.match(sent[0].text, /3\. <b>Twix<\/b> — 7 000 so'm ✅/);
-  const kb = sent[0].opts.reply_markup.inline_keyboard;
-  assert.deepEqual(kb.map((row) => row[0].text), ['🛒 1. Kinder Bueno', '🛒 2. Snickers 50g', '🛒 3. Twix']);
-  assert.equal(kb[1][0].url, 'https://t.me/shokoladchi_bot?start=product_2');
+  assert.deepEqual(sent[0].opts.reply_markup.inline_keyboard, ONE_BOT_BUTTON);
 });
 
 test('handler: bitta mahsulot — kartochka va "Buyurtma berish" tugmasi', async () => {
@@ -288,7 +288,7 @@ test('handler: 2 ta mahsulot, 1 ta rasm — rasm ostida ro\'yxat va tugmalar', a
   await h.handleBusinessMessage(msg());
   assert.equal(sent.length, 1);
   assert.match(sent[0].opts.caption, /1\. <b>Kinder Bueno<\/b>[\s\S]*2\. <b>Rasmsiz<\/b>/);
-  assert.equal(sent[0].opts.reply_markup.inline_keyboard.length, 2);
+  assert.deepEqual(sent[0].opts.reply_markup.inline_keyboard, ONE_BOT_BUTTON);
 });
 
 const ALBUM = ['1', '2', '3'].map((id) => ({
@@ -304,11 +304,7 @@ test('handler: bir nechta rasm — albom, keyin ro\'yxat va tugmalar', async () 
   assert.ok(sent[0].media.every((m) => m.type === 'photo'));
   assert.equal(sent[0].opts.business_connection_id, 'bc1');
   assert.match(sent[1].text, /1\. <b>Kinder 1<\/b>[\s\S]*3\. <b>Kinder 3<\/b> — 3 000 so'm/);
-  assert.deepEqual(sent[1].opts.reply_markup.inline_keyboard.map((r) => r[0].url), [
-    'https://t.me/shokoladchi_bot?start=product_1',
-    'https://t.me/shokoladchi_bot?start=product_2',
-    'https://t.me/shokoladchi_bot?start=product_3',
-  ]);
+  assert.deepEqual(sent[1].opts.reply_markup.inline_keyboard, ONE_BOT_BUTTON);
   assert.deepEqual(photos.log.remembered.map((r) => r[1]), ['album-0', 'album-1', 'album-2']);
 });
 
@@ -319,13 +315,13 @@ test('handler: albom yuborilmasa ham ro\'yxat va tugmalar boradi; yuklanmagan ra
   await r1.h.handleBusinessMessage(msg());
   assert.equal(r1.sent.length, 1);
   assert.match(r1.sent[0].text, /Topilgan mahsulotlar/);
-  assert.equal(r1.sent[0].opts.reply_markup.inline_keyboard.length, 3);
+  assert.deepEqual(r1.sent[0].opts.reply_markup.inline_keyboard, ONE_BOT_BUTTON);
 
   const broken = { ...fakePhotos(), get: async (url) => { if (url.endsWith('2.webp')) throw new Error('404'); return `ok-${url}`; } };
   const r2 = setup({ products: ALBUM, photos: broken });
   await r2.h.handleBusinessMessage(msg());
   assert.equal(r2.sent[0].media.length, 2);
-  assert.equal(r2.sent[1].opts.reply_markup.inline_keyboard.length, 3);
+  assert.deepEqual(r2.sent[1].opts.reply_markup.inline_keyboard, ONE_BOT_BUTTON);
 });
 
 test('handler: rasm yuborilmasa matn + tugma yuboriladi', async () => {

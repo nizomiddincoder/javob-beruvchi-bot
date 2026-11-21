@@ -52,13 +52,9 @@ export function productListText(products) {
   return ['🍫 <b>Topilgan mahsulotlar:</b>', '', ...lines, '', '🛒 Buyurtma berish uchun pastdagi tugmani bosing 👇'].join('\n');
 }
 
-const MAX_BUTTON_NAME = 36;
-
-/** Tugma yozuvi: bitta mahsulot — "Buyurtma berish", bir nechta — "🛒 2. Kinder Kotta" */
-export function orderButtonText(p, index, total) {
-  if (total === 1) return ORDER_BUTTON;
-  const name = p.name.length > MAX_BUTTON_NAME ? `${p.name.slice(0, MAX_BUTTON_NAME - 1).trimEnd()}…` : p.name;
-  return `🛒 ${index + 1}. ${name}`;
+/** Buyurtma botining o'zi (ro'yxat ostidagi umumiy tugma uchun) */
+export function botUrl(botUsername) {
+  return `https://t.me/${botUsername}`;
 }
 
 const MAX_FORWARD_TEXT = 3000;

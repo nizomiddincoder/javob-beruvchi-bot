@@ -1,8 +1,9 @@
 import {
   OPERATOR_REPLY,
+  ORDER_BUTTON,
   adminText,
+  botUrl,
   escapeHtml,
-  orderButtonText,
   orderUrl,
   productListText,
   productText,
@@ -79,16 +80,17 @@ export function createHandlers({
   /**
    * Topilgan mahsulotlarni yuborish:
    * - bitta mahsulot: rasm + kartochka (nomi, tavsifi, narxi) + "Buyurtma berish" tugmasi;
-   * - bir nechta: rasmlar albom bo'lib, ostidan ro'yxat (nomi, narxi, mavjudligi) va har biriga buyurtma tugmasi.
+   * - bir nechta: rasmlar albom bo'lib, ostidan ro'yxat (nomi, narxi, mavjudligi) va bitta "Buyurtma berish"
+   *   tugmasi (buyurtma botini ochadi).
    * Telegram albomga tugma qo'shishga ruxsat bermaydi, shuning uchun ro'yxat albomdan keyingi xabarda.
    */
   async function sendProducts(chatId, bcId, products) {
     const single = products.length === 1;
     const text = single ? productText(products[0]) : productListText(products);
-    const buttons = products.map((p, i) => ({
-      text: orderButtonText(p, i, products.length),
-      url: orderUrl(config.orderBotUsername, p.id),
-    }));
+    // Bitta tugma: bitta mahsulot bo'lsa — o'sha mahsulotga, ro'yxat bo'lsa — buyurtma botiga
+    const buttons = [
+      { text: ORDER_BUTTON, url: single ? orderUrl(config.orderBotUsername, products[0].id) : botUrl(config.orderBotUsername) },
+    ];
 
     const ready = await preparePhotos(products);
 
