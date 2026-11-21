@@ -2,8 +2,11 @@
 
 Mijoz biznes akkauntingizga yozganda bot uning matnini qidiruv API'ga yuboradi va:
 
-- **mahsulot topilsa** — har bir mahsulotni alohida xabar qilib yuboradi: rasmi, nomi, tavsifi, narxi,
-  mavjudligi va `Buyurtma berish` tugmasi (`https://t.me/<BUYURTMA_BOT_USERNAME>?start=product_<ID>`);
+- **bir nechta mahsulot topilsa** — rasmlarini albom qilib yuboradi, ostidan bitta xabarda ro'yxat
+  (nomi, narxi, mavjudligi) va har bir mahsulotga buyurtma tugmasi. Telegram albomga tugma qo'shishga ruxsat
+  bermaydi, shuning uchun ro'yxat albomdan keyingi xabarda keladi;
+- **bitta mahsulot topilsa** — bitta xabar: rasmi, nomi, tavsifi, narxi, mavjudligi va `Buyurtma berish` tugmasi.
+  Tugmalar `https://t.me/<BUYURTMA_BOT_USERNAME>?start=product_<ID>` ga olib boradi;
 - **hech narsa topilmasa** — mijozga "Operator tez orada javob beradi" deb yozadi va mijoz xabarini
   `ADMIN_CHAT_ID` ga yuboradi.
 
@@ -18,7 +21,7 @@ Bot bazaga ulanmaydi va AI ishlatmaydi — faqat `GET {SEARCH_API_URL}/search?q=
 
 `image` va `description` ixtiyoriy. `image` bo'lsa, mahsulot rasm bilan yuboriladi. Rasm qidiruv API
 serveridan yuklab olinadi, JPEG'ga o'giriladi va Telegram'ga yuklanadi (WebP'ni Telegram rasm sifatida
-yaxshi qabul qilmaydi). Rasm yuborilmasa, mahsulot matn ko'rinishida yuboriladi.
+yaxshi qabul qilmaydi). Rasm yoki albom yuborilmasa ham ro'yxat va tugmalar baribir yuboriladi.
 
 ## Tayyor javoblar (javoblar.json)
 
@@ -50,7 +53,7 @@ Yetkazib berish, manzil, ish vaqti, to'lov kabi savollarga bot `javoblar.json` d
   xabarlar, stiker va ovozli xabarlar javobsiz qoladi.
 - "Salom, kinder bormi?" kabi xabarlarda avval butun matn qidiriladi, topilmasa "salom", "bormi" kabi
   so'zlarsiz qayta qidiriladi, keyin har bir so'z alohida qidiriladi.
-- Bitta xabarga eng ko'pi bilan `MAX_RESULTS` (standart 5) ta mahsulot yuboriladi.
+- Ro'yxatda eng ko'pi bilan `MAX_RESULTS` (standart 5, ko'pi bilan 10) ta mahsulot bo'ladi.
 - "Operator tez orada javob beradi" va har bir tayyor javob bir mijozga 5 daqiqada bir martadan ko'p
   yuborilmaydi (`OPERATOR_REPLY_COOLDOWN_SECONDS`). Adminga esa har bir javobsiz qolgan xabar boradi.
 - Qidiruv API ishlamay qolsa ham mijozga operator javobi yuboriladi, adminga esa "Qidiruv API ishlamadi" deb boradi.

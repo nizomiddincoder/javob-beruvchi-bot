@@ -1,4 +1,12 @@
-import { OPERATOR_REPLY, ORDER_BUTTON, adminText, orderUrl, productText } from './format.js';
+import {
+  OPERATOR_REPLY,
+  adminText,
+  escapeHtml,
+  orderButtonText,
+  orderUrl,
+  productListText,
+  productText,
+} from './format.js';
 import { matchRules } from './rules.js';
 
 /**
@@ -37,40 +45,90 @@ export function createHandlers({
     return true;
   }
 
-  async function sendProduct(chatId, businessConnectionId, p) {
-    const url = orderUrl(config.orderBotUsername, p.id);
-    const reply_markup = { inline_keyboard: [[{ text: ORDER_BUTTON, url }]] };
+  const errText = (e) => e?.description ?? e?.message ?? e;
 
-    // Rasm bo'lsa — rasm + izoh + tugma. Rasm yuborilmasa — pastdagi matnli variant
-    if (p.image && photos) {
-      try {
-        const photo = await photos.get(p.image);
-        const sent = await api.sendPhoto(chatId, photo, {
-          business_connection_id: businessConnectionId,
-          caption: productText(p),
-          parse_mode: 'HTML',
-          reply_markup,
-        });
-        photos.remember(p.image, sent);
-        return;
-      } catch (e) {
-        photos.forget(p.image);
-        logger.warn(`Rasm yuborilmadi (mahsulot ${p.id}): ${e?.description ?? e?.message ?? e}. Matn yuboriladi`);
-      }
-    }
+  /** Rasmlarni tayyorlaydi (yuklab olish/JPEG). Tayyorlanmaganlari tashlab yuboriladi */
+  async function preparePhotos(products) {
+    if (!photos) return [];
+    const withImage = products.filter((p) => p.image).slice(0, 10);
+    const results = await Promise.allSettled(withImage.map((p) => photos.get(p.image)));
+    const ready = [];
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') ready.push({ url: withImage[i].image, media: r.value });
+      else logger.warn(`Rasm tayyorlanmadi (mahsulot ${withImage[i].id}): ${errText(r.reason)}`);
+    });
+    return ready;
+  }
 
-    const base = { business_connection_id: businessConnectionId, parse_mode: 'HTML', link_preview_options: { is_disabled: true } };
+  /** Matn + tugmalar. Tugmalar rad etilsa — havolalar matn ichida */
+  async function sendTextWithButtons(chatId, bcId, text, buttons) {
+    const base = { business_connection_id: bcId, parse_mode: 'HTML', link_preview_options: { is_disabled: true } };
     try {
-      await api.sendMessage(chatId, productText(p), { ...base, reply_markup });
+      await api.sendMessage(chatId, text, { ...base, reply_markup: { inline_keyboard: buttons.map((b) => [b]) } });
     } catch (e) {
-      // Ehtiyot chorasi: tugma rad etilsa — havolani matn ichida yuboramiz
       if (e?.error_code === 400 && /button|markup|keyboard/i.test(e?.description ?? '')) {
-        logger.warn(`Tugma rad etildi (${e.description}), havola matnda yuboriladi`);
-        await api.sendMessage(chatId, `${productText(p)}\n\n<a href="${url}">${ORDER_BUTTON}</a>`, base);
+        logger.warn(`Tugma rad etildi (${e.description}), havolalar matnda yuboriladi`);
+        const links = buttons.map((b) => `<a href="${b.url}">${escapeHtml(b.text)}</a>`).join('\n');
+        await api.sendMessage(chatId, `${text}\n\n${links}`, base);
       } else {
         throw e;
       }
     }
+  }
+
+  /**
+   * Topilgan mahsulotlarni yuborish:
+   * - bitta mahsulot: rasm + kartochka (nomi, tavsifi, narxi) + "Buyurtma berish" tugmasi;
+   * - bir nechta: rasmlar albom bo'lib, ostidan ro'yxat (nomi, narxi, mavjudligi) va har biriga buyurtma tugmasi.
+   * Telegram albomga tugma qo'shishga ruxsat bermaydi, shuning uchun ro'yxat albomdan keyingi xabarda.
+   */
+  async function sendProducts(chatId, bcId, products) {
+    const single = products.length === 1;
+    const text = single ? productText(products[0]) : productListText(products);
+    const buttons = products.map((p, i) => ({
+      text: orderButtonText(p, i, products.length),
+      url: orderUrl(config.orderBotUsername, p.id),
+    }));
+
+    const ready = await preparePhotos(products);
+
+    // Bitta rasm va matn rasm izohiga sig'sa — hammasi bitta xabarda
+    if (ready.length === 1 && text.length <= 1000) {
+      try {
+        const sent = await api.sendPhoto(chatId, ready[0].media, {
+          business_connection_id: bcId,
+          caption: text,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: buttons.map((b) => [b]) },
+        });
+        photos.remember(ready[0].url, sent);
+        return;
+      } catch (e) {
+        photos.forget(ready[0].url);
+        logger.warn(`Rasm yuborilmadi: ${errText(e)}. Matn yuboriladi`);
+      }
+    } else if (ready.length === 1) {
+      try {
+        photos.remember(ready[0].url, await api.sendPhoto(chatId, ready[0].media, { business_connection_id: bcId }));
+      } catch (e) {
+        photos.forget(ready[0].url);
+        logger.warn(`Rasm yuborilmadi: ${errText(e)}`);
+      }
+    } else if (ready.length > 1) {
+      try {
+        const sent = await api.sendMediaGroup(
+          chatId,
+          ready.map((r) => ({ type: 'photo', media: r.media })),
+          { business_connection_id: bcId },
+        );
+        ready.forEach((r, i) => photos.remember(r.url, sent?.[i]));
+      } catch (e) {
+        ready.forEach((r) => photos.forget(r.url));
+        logger.warn(`Albom yuborilmadi: ${errText(e)}. Faqat ro'yxat yuboriladi`);
+      }
+    }
+
+    await sendTextWithButtons(chatId, bcId, text, buttons);
   }
 
   async function handleBusinessMessage(msg) {
@@ -104,7 +162,7 @@ export function createHandlers({
 
     if (products.length) {
       logger.info(`chat ${chatId}: ${products.length} ta mahsulot yuborilmoqda`);
-      for (const p of products) await sendProduct(chatId, bcId, p);
+      await sendProducts(chatId, bcId, products);
       return;
     }
 

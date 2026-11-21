@@ -39,6 +39,28 @@ export function productText(p) {
   return lines.join('\n');
 }
 
+/**
+ * Bir nechta mahsulot — bitta ro'yxat (HTML):
+ * 1. <b>Kinder</b> — 25 000 so'm ✅
+ */
+export function productListText(products) {
+  const lines = products.map((p, i) => {
+    const price = formatPrice(p.price);
+    const status = p.available === true ? ' ✅' : p.available === false ? ' ❌ hozircha yo\'q' : '';
+    return `${i + 1}. <b>${escapeHtml(p.name)}</b>${price ? ` — ${price}` : ''}${status}`;
+  });
+  return ['🍫 <b>Topilgan mahsulotlar:</b>', '', ...lines, '', '🛒 Buyurtma berish uchun pastdagi tugmani bosing 👇'].join('\n');
+}
+
+const MAX_BUTTON_NAME = 36;
+
+/** Tugma yozuvi: bitta mahsulot — "Buyurtma berish", bir nechta — "🛒 2. Kinder Kotta" */
+export function orderButtonText(p, index, total) {
+  if (total === 1) return ORDER_BUTTON;
+  const name = p.name.length > MAX_BUTTON_NAME ? `${p.name.slice(0, MAX_BUTTON_NAME - 1).trimEnd()}…` : p.name;
+  return `🛒 ${index + 1}. ${name}`;
+}
+
 const MAX_FORWARD_TEXT = 3000;
 
 /** Adminga: mijoz xabari va kimdan kelgani */

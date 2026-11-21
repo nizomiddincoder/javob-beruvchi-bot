@@ -163,6 +163,11 @@ function setup({ products = [], fail = false, apiError = null, photos = null, ph
       sent.push({ chatId, photo, opts });
       return { photo: [{ file_id: `fid-${sent.length}` }] };
     },
+    sendMediaGroup: async (chatId, media, opts = {}) => {
+      if (photoError) throw photoError;
+      sent.push({ chatId, media, opts });
+      return media.map((_, i) => ({ photo: [{ file_id: `album-${i}` }] }));
+    },
   };
   const searchProducts = async () => {
     if (fail) throw new Error('down');
@@ -182,21 +187,28 @@ const msg = (over = {}) => ({
   ...over,
 });
 
-test('handler: topilgan har bir mahsulot alohida xabar va tugma bilan', async () => {
+test('handler: bir nechta mahsulot — bitta ro\'yxat xabari, har biriga tugma', async () => {
   const { sent, h } = setup({ products: normalizeResults(DB) });
   await h.handleBusinessMessage(msg());
-  assert.equal(sent.length, 3);
-  for (const s of sent) {
-    assert.equal(s.chatId, 555);
-    assert.equal(s.opts.business_connection_id, 'bc1');
-  }
-  const btn = sent[0].opts.reply_markup.inline_keyboard[0][0];
-  assert.equal(btn.text, 'Buyurtma berish');
-  assert.equal(btn.url, 'https://t.me/shokoladchi_bot?start=product_1');
-  assert.match(sent[0].text, /Kinder Bueno/);
-  assert.match(sent[0].text, /12 500 so'm/);
-  assert.match(sent[0].text, /✅ Mavjud/);
-  assert.match(sent[1].text, /❌ Hozircha mavjud emas/);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].chatId, 555);
+  assert.equal(sent[0].opts.business_connection_id, 'bc1');
+  assert.match(sent[0].text, /1\. <b>Kinder Bueno<\/b> — 12 500 so'm ✅/);
+  assert.match(sent[0].text, /2\. <b>Snickers 50g<\/b> — 8 000 so'm ❌ hozircha yo'q/);
+  assert.match(sent[0].text, /3\. <b>Twix<\/b> — 7 000 so'm ✅/);
+  const kb = sent[0].opts.reply_markup.inline_keyboard;
+  assert.deepEqual(kb.map((row) => row[0].text), ['🛒 1. Kinder Bueno', '🛒 2. Snickers 50g', '🛒 3. Twix']);
+  assert.equal(kb[1][0].url, 'https://t.me/shokoladchi_bot?start=product_2');
+});
+
+test('handler: bitta mahsulot — kartochka va "Buyurtma berish" tugmasi', async () => {
+  const { sent, h } = setup({ products: normalizeResults(DB).slice(0, 1) });
+  await h.handleBusinessMessage(msg());
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].text, /<b>Kinder Bueno<\/b>\n💰 Narxi: 12 500 so'm\n✅ Mavjud/);
+  assert.deepEqual(sent[0].opts.reply_markup.inline_keyboard, [
+    [{ text: 'Buyurtma berish', url: 'https://t.me/shokoladchi_bot?start=product_1' }],
+  ]);
 });
 
 test('handler: topilmasa — mijozga operator javobi, adminga xabar', async () => {
@@ -248,7 +260,7 @@ function fakePhotos() {
   return {
     log,
     get: async (url) => `file-for-${url}`,
-    remember: (url, msg) => log.remembered.push([url, msg.photo.at(-1).file_id]),
+    remember: (url, msg) => log.remembered.push([url, msg?.photo?.at(-1)?.file_id]),
     forget: (url) => log.forgotten.push(url),
   };
 }
@@ -258,18 +270,62 @@ const WITH_IMAGE = [
   { id: '8', name: 'Rasmsiz', description: '', price: 1000, available: true, image: null },
 ];
 
-test('handler: rasmli mahsulot rasm + izoh + tugma bilan, rasmsizi matn bilan', async () => {
+test('handler: bitta rasmli mahsulot — rasm + kartochka + tugma bitta xabarda', async () => {
   const photos = fakePhotos();
-  const { sent, h } = setup({ products: WITH_IMAGE, photos });
+  const { sent, h } = setup({ products: WITH_IMAGE.slice(0, 1), photos });
   await h.handleBusinessMessage(msg());
-  assert.equal(sent.length, 2);
+  assert.equal(sent.length, 1);
   assert.equal(sent[0].photo, 'file-for-https://api.example.com/uploads/k.webp');
   assert.equal(sent[0].opts.business_connection_id, 'bc1');
   assert.match(sent[0].opts.caption, /Kinder Bueno[\s\S]*Yong'oqli[\s\S]*12 500 so'm/);
   assert.equal(sent[0].opts.reply_markup.inline_keyboard[0][0].url, 'https://t.me/shokoladchi_bot?start=product_7');
   assert.deepEqual(photos.log.remembered, [['https://api.example.com/uploads/k.webp', 'fid-1']]);
-  assert.equal(sent[1].photo, undefined);
-  assert.match(sent[1].text, /Rasmsiz/);
+});
+
+test('handler: 2 ta mahsulot, 1 ta rasm — rasm ostida ro\'yxat va tugmalar', async () => {
+  const photos = fakePhotos();
+  const { sent, h } = setup({ products: WITH_IMAGE, photos });
+  await h.handleBusinessMessage(msg());
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].opts.caption, /1\. <b>Kinder Bueno<\/b>[\s\S]*2\. <b>Rasmsiz<\/b>/);
+  assert.equal(sent[0].opts.reply_markup.inline_keyboard.length, 2);
+});
+
+const ALBUM = ['1', '2', '3'].map((id) => ({
+  id, name: `Kinder ${id}`, description: '', price: 1000 * Number(id), available: true, image: `https://api.example.com/uploads/${id}.webp`,
+}));
+
+test('handler: bir nechta rasm — albom, keyin ro\'yxat va tugmalar', async () => {
+  const photos = fakePhotos();
+  const { sent, h } = setup({ products: ALBUM, photos });
+  await h.handleBusinessMessage(msg());
+  assert.equal(sent.length, 2);
+  assert.deepEqual(sent[0].media.map((m) => m.media), ALBUM.map((p) => `file-for-${p.image}`));
+  assert.ok(sent[0].media.every((m) => m.type === 'photo'));
+  assert.equal(sent[0].opts.business_connection_id, 'bc1');
+  assert.match(sent[1].text, /1\. <b>Kinder 1<\/b>[\s\S]*3\. <b>Kinder 3<\/b> — 3 000 so'm/);
+  assert.deepEqual(sent[1].opts.reply_markup.inline_keyboard.map((r) => r[0].url), [
+    'https://t.me/shokoladchi_bot?start=product_1',
+    'https://t.me/shokoladchi_bot?start=product_2',
+    'https://t.me/shokoladchi_bot?start=product_3',
+  ]);
+  assert.deepEqual(photos.log.remembered.map((r) => r[1]), ['album-0', 'album-1', 'album-2']);
+});
+
+test('handler: albom yuborilmasa ham ro\'yxat va tugmalar boradi; yuklanmagan rasm tashlab ketiladi', async () => {
+  const photos = fakePhotos();
+  const err = Object.assign(new Error('x'), { error_code: 400, description: 'Bad Request: MEDIA_INVALID' });
+  const r1 = setup({ products: ALBUM, photos, photoError: err });
+  await r1.h.handleBusinessMessage(msg());
+  assert.equal(r1.sent.length, 1);
+  assert.match(r1.sent[0].text, /Topilgan mahsulotlar/);
+  assert.equal(r1.sent[0].opts.reply_markup.inline_keyboard.length, 3);
+
+  const broken = { ...fakePhotos(), get: async (url) => { if (url.endsWith('2.webp')) throw new Error('404'); return `ok-${url}`; } };
+  const r2 = setup({ products: ALBUM, photos: broken });
+  await r2.h.handleBusinessMessage(msg());
+  assert.equal(r2.sent[0].media.length, 2);
+  assert.equal(r2.sent[1].opts.reply_markup.inline_keyboard.length, 3);
 });
 
 test('handler: rasm yuborilmasa matn + tugma yuboriladi', async () => {
