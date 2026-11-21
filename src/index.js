@@ -1,5 +1,6 @@
 import { Bot, GrammyError, HttpError } from 'grammy';
 import { loadConfig } from './config.js';
+import { createAnalyzer } from './ai.js';
 import { createHandlers } from './handlers.js';
 import { createPhotoSource } from './images.js';
 import { loadRulesFile } from './rules.js';
@@ -36,7 +37,20 @@ try {
 }
 console.log(`Tayyor javoblar: ${rules.length} ta qoida`);
 
-const { handleBusinessMessage } = createHandlers({ api: bot.api, searchProducts, config, photos, getRules: () => rules });
+// Claude API: ANTHROPIC_API_KEY bo'lsa xabarlar Claude bilan tahlil qilinadi
+const analyze = config.anthropicApiKey
+  ? createAnalyzer({ apiKey: config.anthropicApiKey, model: config.claudeModel, timeoutMs: config.claudeTimeoutMs })
+  : null;
+console.log(analyze ? `Claude yoqilgan (${config.claudeModel})` : 'Claude o\'chirilgan (ANTHROPIC_API_KEY yo\'q) — oddiy qoidalar ishlaydi');
+
+const { handleBusinessMessage } = createHandlers({
+  api: bot.api,
+  searchProducts,
+  config,
+  photos,
+  getRules: () => rules,
+  analyze,
+});
 
 // Mijoz biznes akkauntga yozgan xabar
 bot.on('business_message', (ctx) => handleBusinessMessage(ctx.businessMessage));

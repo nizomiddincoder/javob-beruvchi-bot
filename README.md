@@ -13,7 +13,26 @@ Mijoz biznes akkauntingizga yozganda bot uning matnini qidiruv API'ga yuboradi v
 - **hech narsa topilmasa** — mijozga "✅ Tushunarli! Hozir sizga aniqini bilib beraman ⏳" deb yozadi va
   mijoz xabarini `ADMIN_CHAT_ID` ga yuboradi.
 
-Bot bazaga ulanmaydi va AI ishlatmaydi — faqat `GET {SEARCH_API_URL}/search?q=...` (sarlavha: `X-API-Key`).
+Bot bazaga ulanmaydi — mahsulotlar faqat `GET {SEARCH_API_URL}/search?q=...` (sarlavha: `X-API-Key`) orqali.
+
+## Claude API (ixtiyoriy)
+
+`ANTHROPIC_API_KEY` o'rnatilsa, mijozning har bir matnli xabari Claude'ga tahlil uchun yuboriladi. Claude:
+
+- xabardan mahsulot nomlarini ajratadi ("Assalomu alaykum, menga kinder bilan twix kerak edi" → `kinder`, `twix`),
+  imlo xatolari va oldingi xabarlarga ishorani ("shundan 2 ta") ham tushunadi;
+- yetkazib berish, manzil, ish vaqti kabi savollarga `javoblar.json` dagi ma'lumotlar asosida, mijoz tilida javob yozadi;
+- javob bera olmasa yoki odam kerak bo'lsa (shikoyat, maxsus buyurtma) — adminga yuboradi.
+
+Narx, mavjudlik va rasmlar baribir faqat qidiruv API'dan olinadi — Claude ularni o'ylab topmaydi.
+Claude ishlamay qolsa (kalit xato, limit, vaqt tugadi), bot o'sha xabarga oddiy kalit so'z qoidalari bilan javob beradi
+va xato Railway loglarida ko'rinadi.
+
+- **Model:** standart `claude-opus-5-5` (eng aqlli). Har bir mijoz xabari pullik so'rov — xarajatni kamaytirish
+  uchun `CLAUDE_MODEL=claude-sonnet-5-5` yoki `claude-haiku-5-5` (eng arzon va tez) qo'ying.
+- **Maxfiylik:** mijoz xabarlari va oxirgi 8 ta xabarlik yozishma Anthropic API'ga yuboriladi. Yozishma tarixi
+  faqat bot xotirasida saqlanadi, qayta ishga tushganda o'chadi.
+- Xarajat va so'rovlarni [platform.claude.com](https://platform.claude.com) da kuzatish va oylik limit qo'yish mumkin.
 
 ## Qidiruv API javobi
 
@@ -28,7 +47,9 @@ yaxshi qabul qilmaydi). Rasm yoki albom yuborilmasa ham ro'yxat va tugmalar bari
 
 ## Tayyor javoblar (javoblar.json)
 
-Yetkazib berish, manzil, ish vaqti, to'lov kabi savollarga bot `javoblar.json` dagi qoidalar bo'yicha javob beradi:
+Yetkazib berish, manzil, ish vaqti, to'lov kabi savollarga bot `javoblar.json` dagi qoidalar bo'yicha javob beradi.
+Claude yoqilgan bo'lsa, bu fayl Claude uchun do'kon haqidagi ma'lumot bo'ladi: Claude kalit so'zlarga emas,
+ma'noga qarab javob yozadi (lekin faqat shu fayldagi ma'lumotdan foydalanadi):
 
 ```json
 {
@@ -99,7 +120,8 @@ ruxsat berishni tanlang va **"Reply to messages" (xabarlarga javob berish)** rux
 2. Railway → **New Project → Deploy from GitHub repo** → shu repozitoriyni tanlang.
    Railway Node.js'ni o'zi aniqlaydi va `npm start` bilan ishga tushiradi. Domen kerak emas (bot long polling bilan ishlaydi).
 3. Servis → **Variables → Raw Editor** → `.env.example` dagi nomlar bo'yicha qiymatlarni kiriting:
-   `BOT_TOKEN`, `SEARCH_API_URL`, `SEARCH_API_KEY`, `ADMIN_CHAT_ID`, `BUYURTMA_BOT_USERNAME`.
+   `BOT_TOKEN`, `SEARCH_API_URL`, `SEARCH_API_KEY`, `ADMIN_CHAT_ID`, `BUYURTMA_BOT_USERNAME`
+   (Claude uchun qo'shimcha: `ANTHROPIC_API_KEY`, ixtiyoriy `CLAUDE_MODEL`).
    - `SEARCH_API_URL` — qidiruv API'ning manzili, oxirida `/search` siz. API shu Railway loyihasida bo'lsa,
      uning public domenini (`https://....up.railway.app`) yozing.
    - `SEARCH_API_KEY` — qidiruv API servisidagi `SEARCH_API_KEY` bilan bir xil qiymat.

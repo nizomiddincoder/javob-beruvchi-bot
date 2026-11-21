@@ -21,6 +21,7 @@ import { isOrderIntent, matchRules } from './rules.js';
  * @param {object} deps.config                       loadConfig() natijasi
  * @param {object} [deps.photos]                     createPhotoSource() — bo'lmasa rasmlar yuborilmaydi
  * @param {Function} [deps.getRules]                 () => qoidalar (javoblar.json)
+ * @param {Function} [deps.analyze]                  createAnalyzer() — Claude; bo'lmasa oddiy qoidalar
  */
 export function createHandlers({
   api,
@@ -28,6 +29,7 @@ export function createHandlers({
   config,
   photos = null,
   getRules = () => [],
+  analyze = null,
   greet = true,
   logger = console,
   now = () => Date.now(),
@@ -154,55 +156,161 @@ export function createHandlers({
       greeted = true;
     }
 
+    const ctx = { msg, text, chatId, bcId, greeted };
+    const previous = historyOf(chatId);
+    remember(chatId, 'customer', text);
+
+    // Claude ulangan bo'lsa — xabarni Claude tahlil qiladi. Claude ishlamasa — oddiy qoidalar
+    if (analyze) {
+      let analysis = null;
+      try {
+        analysis = await analyze({ text, history: previous, faqRules: getRules() });
+      } catch (e) {
+        logger.error(`Claude tahlili ishlamadi (chat ${chatId}): ${errText(e)}. Oddiy qoidalar ishlatiladi`);
+      }
+      if (analysis) return handleWithAnalysis(ctx, analysis);
+    }
+    return handleWithRules(ctx);
+  }
+
+  // --- Yozishma tarixi (Claude oldingi xabarlarni tushunishi uchun; faqat xotirada) ---
+  const history = new Map();
+  const MAX_HISTORY = 8;
+
+  function historyOf(chatId) {
+    return history.get(chatId) ?? [];
+  }
+
+  function remember(chatId, role, text) {
+    if (!analyze) return;
+    const list = [...historyOf(chatId), { role, text: String(text).slice(0, 500) }].slice(-MAX_HISTORY);
+    history.delete(chatId); // eng oxirgi faol chat — Map oxiriga
+    history.set(chatId, list);
+    if (history.size > 2000) history.delete(history.keys().next().value);
+  }
+
+  const productsSummary = (products) =>
+    `mahsulotlar yuborildi: ${products.map((p) => `${p.name}${p.price != null ? ` (${p.price} so'm)` : ''}`).join(', ')}`;
+
+  // --- Umumiy javoblar ---
+
+  async function sendFound(ctx, products) {
+    logger.info(`chat ${ctx.chatId}: ${products.length} ta mahsulot yuborilmoqda`);
+    await sendProducts(ctx.chatId, ctx.bcId, products);
+    remember(ctx.chatId, 'bot', productsSummary(products));
+  }
+
+  /** "Buyurtma bermoqchiman", lekin mahsulot nomi yo'q — nomini so'raymiz + buyurtma botiga tugma */
+  async function sendOrderPrompt(ctx) {
+    if (!replyAllowed(ctx.chatId, 'order')) return;
+    logger.info(`chat ${ctx.chatId}: buyurtma niyati, mahsulot nomi so'raldi`);
+    await sendTextWithButtons(ctx.chatId, ctx.bcId, ORDER_PROMPT, [{ text: ORDER_BUTTON, url: botUrl(config.orderBotUsername) }]);
+    remember(ctx.chatId, 'bot', 'qaysi mahsulotni buyurtma qilmoqchi ekanini so\'radi');
+  }
+
+  async function sendText(ctx, text) {
+    await api.sendMessage(ctx.chatId, text, { business_connection_id: ctx.bcId, link_preview_options: { is_disabled: true } });
+    remember(ctx.chatId, 'bot', text);
+  }
+
+  /** Javob topilmadi: mijozga "Tushunarli! Hozir aniqini bilib beraman", savol — adminga */
+  async function notAnswered(ctx, { searchFailed = false, ackCustomer = true } = {}) {
+    logger.info(`chat ${ctx.chatId}: javob topilmadi${searchFailed ? ' (qidiruv xatosi)' : ''}`);
+    // Hozirgina salomlashib "qanday yordam bera olaman?" deb so'ralgan bo'lsa — bu javob ortiqcha
+    if (ackCustomer && !ctx.greeted && replyAllowed(ctx.chatId, 'operator')) {
+      try {
+        await api.sendMessage(ctx.chatId, OPERATOR_REPLY, { business_connection_id: ctx.bcId });
+        remember(ctx.chatId, 'bot', OPERATOR_REPLY);
+      } catch (e) {
+        logger.error(`Mijozga javob yuborilmadi (chat ${ctx.chatId}): ${errText(e)}`);
+      }
+    }
+    await api.sendMessage(config.adminChatId, adminText({ from: ctx.msg.from, text: ctx.text, searchFailed }), {
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+    });
+  }
+
+  // --- Claude tahlili bo'yicha ---
+
+  /** Claude topgan nomlar bo'yicha qidiruv: natijalar birlashtiriladi */
+  async function searchMany(queries) {
+    const found = new Map();
+    let failed = false;
+    for (const q of queries) {
+      try {
+        for (const p of await searchProducts(q)) if (!found.has(p.id)) found.set(p.id, p);
+      } catch (e) {
+        failed = true;
+        logger.error(`Qidiruv xatosi ("${q}"): ${errText(e)}`);
+      }
+      if (found.size >= config.maxResults) break;
+    }
+    return { products: [...found.values()].slice(0, config.maxResults), failed };
+  }
+
+  async function handleWithAnalysis(ctx, a) {
+    logger.info(`chat ${ctx.chatId}: Claude — ${a.intent}, qidiruv: [${a.productQueries.join(', ')}]${a.needsOperator ? ', operator kerak' : ''}`);
+    let answered = false;
+
+    // Salomlashgan bo'lsak, Claude'ning "salom"ga javobi ortiqcha
+    if (a.reply && !(ctx.greeted && a.intent === 'greeting')) {
+      await sendText(ctx, a.reply);
+      answered = true;
+    }
+
+    let searchFailed = false;
+    if (a.productQueries.length) {
+      const { products, failed } = await searchMany(a.productQueries);
+      searchFailed = failed;
+      if (products.length) {
+        await sendFound(ctx, products);
+        answered = true;
+      }
+    }
+
+    if (!answered && a.intent === 'order' && !searchFailed) {
+      await sendOrderPrompt(ctx);
+      answered = true;
+    }
+
+    // Salomlashish / rahmat — javob shart emas, adminga ham yubormaymiz
+    if (!answered && a.intent === 'greeting' && !a.needsOperator) return;
+
+    if (!answered || a.needsOperator || searchFailed) {
+      await notAnswered(ctx, { searchFailed, ackCustomer: !answered });
+    }
+  }
+
+  // --- Claude'siz: oddiy qoidalar ---
+
+  async function handleWithRules(ctx) {
     // 1. Tayyor javoblar (javoblar.json): yetkazib berish, manzil, ish vaqti va h.k.
-    const rules = matchRules(getRules(), text);
+    const rules = matchRules(getRules(), ctx.text);
     for (const r of rules) {
-      if (!replyAllowed(chatId, `rule:${r.id}`)) continue;
-      logger.info(`chat ${chatId}: qoida "${r.name}"`);
-      await api.sendMessage(chatId, r.answer, { business_connection_id: bcId, link_preview_options: { is_disabled: true } });
+      if (!replyAllowed(ctx.chatId, `rule:${r.id}`)) continue;
+      logger.info(`chat ${ctx.chatId}: qoida "${r.name}"`);
+      await sendText(ctx, r.answer);
     }
 
     // 2. Mahsulot qidiruvi
     let products = [];
     let searchFailed = false;
     try {
-      products = await searchProducts(text);
+      products = await searchProducts(ctx.text);
     } catch (e) {
       searchFailed = true;
-      logger.error(`Qidiruv xatosi (chat ${chatId}): ${e?.message ?? e}`);
+      logger.error(`Qidiruv xatosi (chat ${ctx.chatId}): ${errText(e)}`);
     }
 
-    if (products.length) {
-      logger.info(`chat ${chatId}: ${products.length} ta mahsulot yuborilmoqda`);
-      await sendProducts(chatId, bcId, products);
-      return;
-    }
-
+    if (products.length) return sendFound(ctx, products);
     if (rules.length) return;
 
-    // 3. "Buyurtma bermoqchiman", lekin mahsulot nomi yo'q — nomini so'raymiz + buyurtma botiga tugma
-    if (!searchFailed && isOrderIntent(text)) {
-      if (replyAllowed(chatId, 'order')) {
-        logger.info(`chat ${chatId}: buyurtma niyati, mahsulot nomi so'raldi`);
-        await sendTextWithButtons(chatId, bcId, ORDER_PROMPT, [{ text: ORDER_BUTTON, url: botUrl(config.orderBotUsername) }]);
-      }
-      return;
-    }
+    // 3. Buyurtma niyati, mahsulot nomisiz
+    if (!searchFailed && isOrderIntent(ctx.text)) return sendOrderPrompt(ctx);
 
-    // 4. Hech narsa topilmadi — "Tushunarli! Hozir aniqini bilib beraman" va savol adminga
-    logger.info(`chat ${chatId}: javob topilmadi${searchFailed ? ' (qidiruv xatosi)' : ''}`);
-    // Hozirgina salomlashib "qanday yordam bera olaman?" deb so'ralgan bo'lsa — bu javob ortiqcha
-    if (!greeted && replyAllowed(chatId, 'operator')) {
-      try {
-        await api.sendMessage(chatId, OPERATOR_REPLY, { business_connection_id: bcId });
-      } catch (e) {
-        logger.error(`Mijozga javob yuborilmadi (chat ${chatId}): ${e?.description ?? e?.message ?? e}`);
-      }
-    }
-    await api.sendMessage(config.adminChatId, adminText({ from: msg.from, text, searchFailed }), {
-      parse_mode: 'HTML',
-      link_preview_options: { is_disabled: true },
-    });
+    // 4. Hech narsa topilmadi
+    return notAnswered(ctx, { searchFailed });
   }
 
   return { handleBusinessMessage };

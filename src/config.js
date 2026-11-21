@@ -50,5 +50,9 @@ export function loadConfig(env = process.env) {
     // Salomlashish bir mijozga necha soniyada bir marta (standart 12 soat; 0 — har bir xabarga)
     greetingCooldownSec: intEnv(env, 'GREETING_COOLDOWN_SECONDS', 43200, 0, 604800),
     searchTimeoutMs: intEnv(env, 'SEARCH_TIMEOUT_MS', 8000, 1000, 60000),
+    // Claude API (ixtiyoriy): kalit bo'lsa — xabarlar Claude bilan tahlil qilinadi, bo'lmasa oddiy qoidalar
+    anthropicApiKey: env.ANTHROPIC_API_KEY?.trim() || null,
+    claudeModel: env.CLAUDE_MODEL?.trim() || 'claude-opus-5-5',
+    claudeTimeoutMs: intEnv(env, 'CLAUDE_TIMEOUT_MS', 20000, 3000, 120000),
   };
 }
