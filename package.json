@@ -1,0 +1,18 @@
+{
+  "name": "shokoladchi-business-autoreply",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Telegram Business auto-reply boti: mijoz xabarini qidiruv API orqali mahsulotlarga moslab javob beradi",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "grammy": "^1.46.0"
+  }
+}

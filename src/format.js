@@ -1,0 +1,47 @@
+export const OPERATOR_REPLY = 'Operator tez orada javob beradi';
+export const ORDER_BUTTON = 'Buyurtma berish';
+
+export function escapeHtml(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** 125000 -> "125 000 so'm" */
+export function formatPrice(amount) {
+  if (amount == null || !Number.isFinite(amount)) return null;
+  const n = Math.round(amount);
+  const s = String(Math.abs(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return `${n < 0 ? '-' : ''}${s} so'm`;
+}
+
+export function orderUrl(botUsername, productId) {
+  return `https://t.me/${botUsername}?start=product_${productId}`;
+}
+
+/** Bitta mahsulot kartochkasi (HTML) */
+export function productText(p) {
+  const lines = [`<b>${escapeHtml(p.name)}</b>`];
+  const price = formatPrice(p.price);
+  if (price) lines.push(`Narxi: ${price}`);
+  if (p.available === true) lines.push('✅ Mavjud');
+  else if (p.available === false) lines.push('❌ Hozircha mavjud emas');
+  return lines.join('\n');
+}
+
+const MAX_FORWARD_TEXT = 3000;
+
+/** Adminga: mijoz xabari va kimdan kelgani */
+export function adminText({ from, text, searchFailed }) {
+  const name = [from?.first_name, from?.last_name].filter(Boolean).join(' ') || 'Mijoz';
+  const who = [
+    `<a href="tg://user?id=${from?.id}">${escapeHtml(name)}</a>`,
+    from?.username ? `@${escapeHtml(from.username)}` : null,
+    `ID: <code>${from?.id}</code>`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const body = text.length > MAX_FORWARD_TEXT ? `${text.slice(0, MAX_FORWARD_TEXT)}…` : text;
+  const title = searchFailed
+    ? '⚠️ Qidiruv API ishlamadi — mijozga operator javobi yuborildi'
+    : '🔔 Mijoz xabariga mos mahsulot topilmadi';
+  return `${title}\n\n👤 ${who}\n💬 ${escapeHtml(body)}`;
+}
