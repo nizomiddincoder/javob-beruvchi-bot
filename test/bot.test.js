@@ -34,6 +34,10 @@ test('keywords: salomlashish va savol so\'zlari olib tashlanadi', () => {
   assert.deepEqual(keywords('Snickers va Twix bormi'), ['snickers', 'twix']);
   assert.deepEqual(keywords('привет, сколько стоит Milka?'), ['milka']);
   assert.deepEqual(keywords('Kinder buyurtma qilmoqchiman'), ['kinder']);
+  // "men" MENTOS ga mos kelib qolmasin
+  assert.deepEqual(keywords('Men buyurtma bermoqchi edim'), []);
+  assert.deepEqual(buildQueries('Men buyurtma bermoqchi edim'), [['Men buyurtma bermoqchi edim']]);
+  assert.deepEqual(keywords('Menga Mentos kerak edi'), ['mentos']);
   assert.deepEqual(keywords('2 ta snickers zakaz qilsam bo\'ladimi'), ['snickers']);
 });
 
@@ -335,6 +339,29 @@ test('handler: rasm yuborilmasa matn + tugma yuboriladi', async () => {
   assert.match(sent[0].text, /Kinder Bueno/);
   assert.equal(sent[0].opts.reply_markup.inline_keyboard[0][0].text, 'Buyurtma berish');
   assert.deepEqual(photos.log.forgotten, ['https://api.example.com/uploads/k.webp']);
+});
+
+test('handler: "Men buyurtma bermoqchi edim" — Mentos emas, mahsulot nomini so\'raydi', async () => {
+  const MENTOS = [
+    { id: 10, name: 'MENTOS DRAJE', price: 9000, available: true },
+    { id: 11, name: 'MENTOS 54 GR', price: 25000, available: true },
+  ];
+  const search = createSearch({ apiUrl: 'https://api.example.com', apiKey: 'k', timeoutMs: 1000, maxResults: 5, fetchImpl: fakeFetch(MENTOS, []) });
+  const sent = [];
+  const h = createHandlers({
+    api: { sendMessage: async (chatId, text, opts) => sent.push({ chatId, text, opts }) },
+    searchProducts: search,
+    config: loadConfig(ENV),
+    greet: false,
+    logger: { info() {}, warn() {}, error() {} },
+  });
+  await h.handleBusinessMessage(msg({ text: 'Men buyurtma bermoqchi edim' }));
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].text, /Qaysi mahsulotni buyurtma qilmoqchisiz/);
+  assert.doesNotMatch(sent[0].text, /MENTOS/);
+  // Nomi yozilsa — topiladi
+  await h.handleBusinessMessage(msg({ text: 'Menga mentos kerak edi' }));
+  assert.match(sent[1].text, /MENTOS DRAJE[\s\S]*MENTOS 54 GR/);
 });
 
 test('handler: tugma rad etilsa havola matnda yuboriladi', async () => {

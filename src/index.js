@@ -42,6 +42,13 @@ const analyze = config.anthropicApiKey
   ? createAnalyzer({ apiKey: config.anthropicApiKey, model: config.claudeModel, timeoutMs: config.claudeTimeoutMs })
   : null;
 console.log(analyze ? `Claude yoqilgan (${config.claudeModel})` : 'Claude o\'chirilgan (ANTHROPIC_API_KEY yo\'q) — oddiy qoidalar ishlaydi');
+// Kalitning o'zi logga yozilmaydi — faqat formati tekshiriladi
+if (config.anthropicApiKey && !/^sk-ant-[A-Za-z0-9_-]+$/.test(config.anthropicApiKey)) {
+  console.warn(
+    'DIQQAT: ANTHROPIC_API_KEY "sk-ant-" bilan boshlanmaydi yoki ichida bo\'sh joy/qo\'shtirnoq bor. ' +
+      'Kalitni platform.claude.com → API Keys dan qayta nusxalab, Railway Variables\'ga qo\'shtirnoqsiz qo\'ying.',
+  );
+}
 
 const { handleBusinessMessage } = createHandlers({
   api: bot.api,
