@@ -6,7 +6,8 @@ import Anthropic from '@anthropic-ai/sdk';
  * Claude faqat xabarni tushunadi va JSON qaytaradi:
  *   - intent:          greeting | product | order | question | other
  *   - product_queries: qidiruv API'ga yuboriladigan mahsulot nomlari ("kinder", "snickers")
- *   - reply:           tayyor javoblar (javoblar.json) asosida mijozga qisqa javob, bo'lmasa ""
+ *   - reply:           mijozga qisqa javob (umumiy so'rovga suhbat, savolga javoblar.json asosida), bo'lmasa ""
+ *   - order_button:    javob ostiga buyurtma botiga o'tish tugmasi kerakmi
  *   - needs_operator:  odam javob berishi kerakmi
  * Narx, mavjudlik va rasmlar faqat qidiruv API'dan olinadi — Claude ularni o'ylab topmaydi.
  */
@@ -20,9 +21,10 @@ const SCHEMA = {
     intent: { type: 'string', enum: INTENTS },
     product_queries: { type: 'array', items: { type: 'string' } },
     reply: { type: 'string' },
+    order_button: { type: 'boolean' },
     needs_operator: { type: 'boolean' },
   },
-  required: ['intent', 'product_queries', 'reply', 'needs_operator'],
+  required: ['intent', 'product_queries', 'reply', 'order_button', 'needs_operator'],
 };
 
 const MAX_INPUT = 1000;
@@ -43,13 +45,20 @@ intent:
 - "question" — do'kon haqida savol (yetkazib berish, manzil, ish vaqti, to'lov va h.k.);
 - "other" — boshqa.
 
-product_queries — mijoz so'ragan mahsulotlar nomi, qidiruv uchun qisqa qilib, lotin yozuvida (masalan: "kinder", "snickers", "milka"). Ko'pi bilan ${MAX_QUERIES} ta. "Salom", "bormi", "narxi", "buyurtma", son va o'lchov so'zlarini qo'shma. Mijoz oldingi yozishmadagi mahsulotga ishora qilsa ("shundan 2 ta"), o'sha nomni yoz. Mahsulot so'ralmagan bo'lsa — bo'sh ro'yxat.
+Avval xabar MAZMUNINI tushun, keyin qaror qil: mijoz ANIQ mahsulot so'rayaptimi yoki umumiy so'rayaptimi.
 
-reply — mijozga yuboriladigan qisqa javob, faqat quyidagi do'kon ma'lumotlariga tayanib. Mijoz qaysi tilda yozgan bo'lsa (o'zbek lotin/kirill yoki rus), o'sha tilda, samimiy, 1-2 ta emoji bilan. Qoidalar:
-- Narx, mavjudlik, manzil, yetkazib berish shartlarini O'YLAB TOPMA. Ma'lumotlarda yo'q bo'lsa — reply bo'sh, needs_operator: true.
-- Mahsulotlarni ta'riflama va narxini yozma — bot ularni rasm va narxi bilan o'zi yuboradi.
+product_queries — faqat mijoz ANIQ mahsulot yoki brend nomini aytganda: qidiruv uchun qisqa, lotin yozuvida (masalan: "kinder", "snickers", "milka", "raffaello"). Ko'pi bilan ${MAX_QUERIES} ta. "Salom", "bormi", "narxi", "buyurtma", son va o'lchov so'zlarini qo'shma. Mijoz oldingi yozishmadagi mahsulotga ishora qilsa ("shundan 2 ta"), o'sha nomni yoz.
+Umumiy toifa yoki noaniq so'rovda ("shokoladlar bormi", "sovg'a uchun nima bor", "shirinliklar", "bolalarga biror narsa", "arzonroq narsa") — product_queries BO'SH. Bunday paytda mahsulot ro'yxatini yubormaymiz, avval mijoz bilan gaplashamiz (reply + order_button).
+
+reply — mijozga yuboriladigan qisqa javob. Mijoz qaysi tilda yozgan bo'lsa (o'zbek lotin/kirill yoki rus), o'sha tilda, samimiy, 1-2 ta emoji bilan. Qoidalar:
+- Do'konda shokoladlar, konfetlar, shirinliklar va sovg'abop mahsulotlar bor. Umumiy toifa so'ralsa — "ha, albatta bor" deb ayt, mijozga aynan qanday mahsulot kerakligini so'ra va o'zi ko'rib buyurtma berishi mumkinligini ayt. Masalan: "Ha, albatta bor! 🎁 Sizga qandaylari kerak? Istasangiz, o'zingiz ko'rib buyurtma berishingiz mumkin 👇"
+- Mijoz buyurtma bermoqchi, lekin nima kerakligini aytmagan bo'lsa — qaysi mahsulot kerakligini so'ra va o'zi ko'rib buyurtma berishi mumkinligini ayt.
+- Aniq narx, aniq mahsulot borligi, manzil, yetkazib berish shartlarini O'YLAB TOPMA — faqat quyidagi do'kon ma'lumotlaridan. Ma'lumotlarda yo'q bo'lsa — reply bo'sh, needs_operator: true.
+- Aniq mahsulot so'ralganda mahsulotlarni ta'riflama va narxini yozma — bot ularni rasm va narxi bilan o'zi yuboradi (reply bo'sh qolishi mumkin).
 - Salomlashish matnini yozma — bot o'zi salomlashadi. Faqat "rahmat"/"xayr" kabi xabarga qisqa javob berish mumkin.
 - Javob berolmasang — reply bo'sh.
+
+order_button — true, agar reply ostiga buyurtma botiga o'tish tugmasi kerak bo'lsa: umumiy toifa so'ralganda, buyurtma bermoqchi bo'lganda, "qanday buyurtma beraman" deganda. Boshqa paytda false.
 
 needs_operator — true, agar odam javob berishi kerak bo'lsa: shikoyat, maxsus buyurtma (tort, sovg'a qutisi va h.k.), ma'lumotlarda yo'q savol.
 
@@ -83,6 +92,7 @@ export function parseAnalysis(raw) {
       ...new Set(queries.filter((q) => typeof q === 'string').map((q) => q.trim().slice(0, 60)).filter(Boolean)),
     ].slice(0, MAX_QUERIES),
     reply: typeof data.reply === 'string' ? data.reply.trim().slice(0, MAX_REPLY) : '',
+    orderButton: data.order_button === true,
     needsOperator: data.needs_operator === true,
   };
 }

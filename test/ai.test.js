@@ -29,7 +29,7 @@ test('parseAnalysis: tozalaydi va cheklaydi', () => {
   const a = parseAnalysis(JSON.stringify({
     intent: 'nimadir', product_queries: [' kinder ', 'kinder', '', 5, 'a', 'b', 'c', 'd'], reply: '  ok  ', needs_operator: 'ha',
   }));
-  assert.deepEqual(a, { intent: 'other', productQueries: ['kinder', 'a', 'b', 'c'], reply: 'ok', needsOperator: false });
+  assert.deepEqual(a, { intent: 'other', productQueries: ['kinder', 'a', 'b', 'c'], reply: 'ok', orderButton: false, needsOperator: false });
   assert.throws(() => parseAnalysis('not json'));
 });
 
@@ -48,16 +48,17 @@ test('createAnalyzer: so\'rov parametrlari va javobni o\'qish', async () => {
     messages: {
       create: async (params) => {
         req = params;
-        return { stop_reason: 'end_turn', content: [{ type: 'text', text: '{"intent":"product","product_queries":["kinder"],"reply":"","needs_operator":false}' }] };
+        return { stop_reason: 'end_turn', content: [{ type: 'text', text: '{"intent":"product","product_queries":["kinder"],"reply":"","order_button":false,"needs_operator":false}' }] };
       },
     },
   };
   const analyze = createAnalyzer({ model: 'claude-opus-5-5', client });
   const a = await analyze({ text: 'kinder bormi', history: [], faqRules: FAQ });
-  assert.deepEqual(a, { intent: 'product', productQueries: ['kinder'], reply: '', needsOperator: false });
+  assert.deepEqual(a, { intent: 'product', productQueries: ['kinder'], reply: '', orderButton: false, needsOperator: false });
   assert.equal(req.model, 'claude-opus-5-5');
   assert.equal(req.output_config.format.type, 'json_schema');
-  assert.deepEqual(req.output_config.format.schema.required, ['intent', 'product_queries', 'reply', 'needs_operator']);
+  assert.deepEqual(req.output_config.format.schema.required, ['intent', 'product_queries', 'reply', 'order_button', 'needs_operator']);
+  assert.match(req.system[0].text, /Umumiy toifa yoki noaniq so'rovda/);
   assert.deepEqual(req.system[0].cache_control, { type: 'ephemeral' });
   assert.match(req.system[0].text, /Yetkazib berish/);
   assert.equal(req.messages[0].role, 'user');
@@ -100,7 +101,24 @@ function setup({ analysis = null, analyzeError = null, catalog = { kinder: [KIND
 }
 
 const msg = (text) => ({ business_connection_id: 'bc', chat: { id: 5, type: 'private' }, from: { id: 5, first_name: 'Ali' }, text });
-const A = (o) => ({ intent: 'other', productQueries: [], reply: '', needsOperator: false, ...o });
+const A = (o) => ({ intent: 'other', productQueries: [], reply: '', orderButton: false, needsOperator: false, ...o });
+
+test('Claude: umumiy so\'rov ("sovg\'a uchun shokoladlar bormi") — ro\'yxat emas, javob + tugma', async () => {
+  const reply = "Ha, albatta bor! 🎁 Sizga qandaylari kerak? Istasangiz, o'zingiz ko'rib buyurtma berishingiz mumkin 👇";
+  const { sent, searches, h } = setup({ analysis: A({ intent: 'product', reply, orderButton: true }) });
+  await h.handleBusinessMessage(msg("Sovg'a uchun shokoladlar ham bormi ?"));
+  assert.deepEqual(searches, []);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].text, reply);
+  assert.equal(sent[0].opts.parse_mode, 'HTML');
+  assert.deepEqual(sent[0].opts.reply_markup.inline_keyboard, [[{ text: 'Buyurtma berish', url: 'https://t.me/shokoladchi_bot' }]]);
+});
+
+test('Claude: javobdagi < > belgilar xavfsiz yuboriladi', async () => {
+  const { sent, h } = setup({ analysis: A({ intent: 'order', reply: 'Narxi <100 000 so\'m> & bor', orderButton: true }) });
+  await h.handleBusinessMessage(msg('buyurtma'));
+  assert.equal(sent[0].text, "Narxi &lt;100 000 so'm&gt; &amp; bor");
+});
 
 test('Claude: mahsulot nomlari qidiriladi, natija bitta ro\'yxat; adminga xabar yo\'q', async () => {
   const { sent, searches, h } = setup({ analysis: A({ intent: 'product', productQueries: ['kinder', 'twix'] }) });

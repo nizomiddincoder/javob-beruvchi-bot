@@ -19,8 +19,11 @@ Bot bazaga ulanmaydi — mahsulotlar faqat `GET {SEARCH_API_URL}/search?q=...` (
 
 `ANTHROPIC_API_KEY` o'rnatilsa, mijozning har bir matnli xabari Claude'ga tahlil uchun yuboriladi. Claude:
 
-- xabardan mahsulot nomlarini ajratadi ("Assalomu alaykum, menga kinder bilan twix kerak edi" → `kinder`, `twix`),
-  imlo xatolari va oldingi xabarlarga ishorani ("shundan 2 ta") ham tushunadi;
+- avval xabar mazmunini tushunadi: aniq mahsulot so'ralsa ("menga kinder bilan twix kerak edi" → `kinder`, `twix`)
+  ro'yxat rasmlari bilan chiqadi; imlo xatolari va oldingi xabarlarga ishorani ("shundan 2 ta") ham tushunadi;
+- umumiy so'rovda ("sovg'a uchun shokoladlar bormi?", "buyurtma bermoqchiman") ro'yxat yubormaydi — suhbat
+  ohangida javob beradi ("Ha, albatta bor! 🎁 Sizga qandaylari kerak? Istasangiz, o'zingiz ko'rib buyurtma
+  berishingiz mumkin 👇") va ostiga `Buyurtma berish` tugmasini qo'yadi;
 - yetkazib berish, manzil, ish vaqti kabi savollarga `javoblar.json` dagi ma'lumotlar asosida, mijoz tilida javob yozadi;
 - javob bera olmasa yoki odam kerak bo'lsa (shikoyat, maxsus buyurtma) — adminga yuboradi.
 

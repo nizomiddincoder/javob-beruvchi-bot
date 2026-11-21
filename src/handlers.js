@@ -255,7 +255,15 @@ export function createHandlers({
 
     // Salomlashgan bo'lsak, Claude'ning "salom"ga javobi ortiqcha
     if (a.reply && !(ctx.greeted && a.intent === 'greeting')) {
-      await sendText(ctx, a.reply);
+      if (a.orderButton) {
+        // "Ha, albatta bor! Qandaylari kerak? ... o'zingiz ko'rib buyurtma berishingiz mumkin 👇" + tugma
+        await sendTextWithButtons(ctx.chatId, ctx.bcId, escapeHtml(a.reply), [
+          { text: ORDER_BUTTON, url: botUrl(config.orderBotUsername) },
+        ]);
+        remember(ctx.chatId, 'bot', a.reply);
+      } else {
+        await sendText(ctx, a.reply);
+      }
       answered = true;
     }
 
@@ -269,7 +277,7 @@ export function createHandlers({
       }
     }
 
-    if (!answered && a.intent === 'order' && !searchFailed) {
+    if (!answered && (a.intent === 'order' || a.orderButton) && !searchFailed) {
       await sendOrderPrompt(ctx);
       answered = true;
     }
