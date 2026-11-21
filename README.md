@@ -20,6 +20,30 @@ Bot bazaga ulanmaydi va AI ishlatmaydi — faqat `GET {SEARCH_API_URL}/search?q=
 serveridan yuklab olinadi, JPEG'ga o'giriladi va Telegram'ga yuklanadi (WebP'ni Telegram rasm sifatida
 yaxshi qabul qilmaydi). Rasm yuborilmasa, mahsulot matn ko'rinishida yuboriladi.
 
+## Tayyor javoblar (javoblar.json)
+
+Yetkazib berish, manzil, ish vaqti, to'lov kabi savollarga bot `javoblar.json` dagi qoidalar bo'yicha javob beradi:
+
+```json
+{
+  "qoidalar": [
+    {
+      "nomi": "Yetkazib berish",
+      "kalit_sozlar": ["dostavka", "yetkazib", "доставка"],
+      "javob": "Toshkent bo'ylab yetkazib beramiz. Narxi 20 000 so'm."
+    }
+  ]
+}
+```
+
+- Mijoz xabarida kalit so'zlardan biri bo'lsa, `javob` yuboriladi. Katta-kichik harf, kirill/lotin yozuvi
+  va apostrof farqi hisobga olinmaydi. "dostavka" kalit so'zi "Dostavkangiz bormi?" xabariga ham mos keladi.
+- 3 harfgacha qisqa kalit so'zlar faqat alohida so'z bo'lib kelsa mos keladi.
+- Bitta xabarga bir nechta qoida mos kelsa (eng ko'pi 3 ta), hammasi yuboriladi, keyin mahsulotlar.
+- Qoida yoki mahsulot topilsa, "Operator tez orada javob beradi" yuborilmaydi va adminga xabar bormaydi.
+- Faylni o'zgartirgach push qiling, Railway qayta deploy qiladi. Fayl xato bo'lsa, servis ishga tushmaydi va
+  logda qaysi qoida xatoligi yoziladi (`npm test` ham buni tekshiradi).
+
 ## Qanday ishlaydi
 
 - Faqat mijoz yozgan matnli xabarlarga (yoki rasm izohiga) javob beradi. Biznes egasining o'zi yozgan
@@ -27,8 +51,8 @@ yaxshi qabul qilmaydi). Rasm yuborilmasa, mahsulot matn ko'rinishida yuboriladi.
 - "Salom, kinder bormi?" kabi xabarlarda avval butun matn qidiriladi, topilmasa "salom", "bormi" kabi
   so'zlarsiz qayta qidiriladi, keyin har bir so'z alohida qidiriladi.
 - Bitta xabarga eng ko'pi bilan `MAX_RESULTS` (standart 5) ta mahsulot yuboriladi.
-- "Operator tez orada javob beradi" bir mijozga 5 daqiqada bir martadan ko'p yuborilmaydi
-  (`OPERATOR_REPLY_COOLDOWN_SECONDS`). Adminga esa har bir topilmagan xabar boradi.
+- "Operator tez orada javob beradi" va har bir tayyor javob bir mijozga 5 daqiqada bir martadan ko'p
+  yuborilmaydi (`OPERATOR_REPLY_COOLDOWN_SECONDS`). Adminga esa har bir javobsiz qolgan xabar boradi.
 - Qidiruv API ishlamay qolsa ham mijozga operator javobi yuboriladi, adminga esa "Qidiruv API ishlamadi" deb boradi.
 
 ## Railway'ga qo'yish

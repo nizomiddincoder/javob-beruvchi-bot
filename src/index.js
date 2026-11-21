@@ -2,6 +2,8 @@ import { Bot, GrammyError, HttpError } from 'grammy';
 import { loadConfig } from './config.js';
 import { createHandlers } from './handlers.js';
 import { createPhotoSource } from './images.js';
+import { loadRulesFile } from './rules.js';
+import { fileURLToPath } from 'node:url';
 import { createSearch } from './search.js';
 
 let config;
@@ -24,7 +26,17 @@ const searchProducts = createSearch({
 // Rasmlar faqat qidiruv API serveridan yuklab olinadi
 const photos = createPhotoSource({ allowedOrigin: new URL(config.searchApiUrl).origin });
 
-const { handleBusinessMessage } = createHandlers({ api: bot.api, searchProducts, config, photos });
+// Tayyor javoblar: loyiha ildizidagi javoblar.json (xato bo'lsa servis ishga tushmaydi — xato logda ko'rinadi)
+let rules;
+try {
+  rules = loadRulesFile(fileURLToPath(new URL('../javoblar.json', import.meta.url)));
+} catch (e) {
+  console.error(e.message);
+  process.exit(1);
+}
+console.log(`Tayyor javoblar: ${rules.length} ta qoida`);
+
+const { handleBusinessMessage } = createHandlers({ api: bot.api, searchProducts, config, photos, getRules: () => rules });
 
 // Mijoz biznes akkauntga yozgan xabar
 bot.on('business_message', (ctx) => handleBusinessMessage(ctx.businessMessage));

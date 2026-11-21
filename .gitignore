@@ -3,3 +3,5 @@ node_modules/
 .env.*
 !.env.example
 *.log
+# Mijozlar bilan yozishmalar (shaxsiy ma'lumot) — gitga tushmasin
+chat-tarixi/

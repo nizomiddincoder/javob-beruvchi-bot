@@ -1,4 +1,5 @@
 import { OPERATOR_REPLY, ORDER_BUTTON, adminText, orderUrl, productText } from './format.js';
+import { matchRules } from './rules.js';
 
 /**
  * business_message ishlovchisi. Telegram API va qidiruv tashqaridan beriladi — test qilish oson.
@@ -8,20 +9,30 @@ import { OPERATOR_REPLY, ORDER_BUTTON, adminText, orderUrl, productText } from '
  * @param {Function} deps.searchProducts             (text) => Promise<Product[]>
  * @param {object} deps.config                       loadConfig() natijasi
  * @param {object} [deps.photos]                     createPhotoSource() — bo'lmasa rasmlar yuborilmaydi
+ * @param {Function} [deps.getRules]                 () => qoidalar (javoblar.json)
  */
-export function createHandlers({ api, searchProducts, config, photos = null, logger = console, now = () => Date.now() }) {
-  // Bir mijozga "Operator tez orada javob beradi" ni ketma-ket ko'p marta yubormaslik uchun
-  const lastOperatorReply = new Map();
+export function createHandlers({
+  api,
+  searchProducts,
+  config,
+  photos = null,
+  getRules = () => [],
+  logger = console,
+  now = () => Date.now(),
+}) {
+  // Bir mijozga bir xil tayyor javobni (operator javobi yoki qoida) ketma-ket ko'p marta yubormaslik uchun
+  const lastReply = new Map();
 
-  function operatorReplyAllowed(chatId) {
+  function replyAllowed(chatId, key) {
     const cooldownMs = config.operatorReplyCooldownSec * 1000;
     if (!cooldownMs) return true;
     const t = now();
-    const last = lastOperatorReply.get(chatId);
+    const mapKey = `${chatId}:${key}`;
+    const last = lastReply.get(mapKey);
     if (last !== undefined && t - last < cooldownMs) return false;
-    lastOperatorReply.set(chatId, t);
-    if (lastOperatorReply.size > 5000) {
-      for (const [id, ts] of lastOperatorReply) if (t - ts >= cooldownMs) lastOperatorReply.delete(id);
+    lastReply.set(mapKey, t);
+    if (lastReply.size > 5000) {
+      for (const [k, ts] of lastReply) if (t - ts >= cooldownMs) lastReply.delete(k);
     }
     return true;
   }
@@ -73,6 +84,15 @@ export function createHandlers({ api, searchProducts, config, photos = null, log
     const chatId = msg.chat.id;
     const bcId = msg.business_connection_id;
 
+    // 1. Tayyor javoblar (javoblar.json): yetkazib berish, manzil, ish vaqti va h.k.
+    const rules = matchRules(getRules(), text);
+    for (const r of rules) {
+      if (!replyAllowed(chatId, `rule:${r.id}`)) continue;
+      logger.info(`chat ${chatId}: qoida "${r.name}"`);
+      await api.sendMessage(chatId, r.answer, { business_connection_id: bcId, link_preview_options: { is_disabled: true } });
+    }
+
+    // 2. Mahsulot qidiruvi
     let products = [];
     let searchFailed = false;
     try {
@@ -88,8 +108,10 @@ export function createHandlers({ api, searchProducts, config, photos = null, log
       return;
     }
 
-    logger.info(`chat ${chatId}: mahsulot topilmadi${searchFailed ? ' (qidiruv xatosi)' : ''}`);
-    if (operatorReplyAllowed(chatId)) {
+    // 3. Qoida ham, mahsulot ham topilmadi — operator javobi
+    if (rules.length) return;
+    logger.info(`chat ${chatId}: javob topilmadi${searchFailed ? ' (qidiruv xatosi)' : ''}`);
+    if (replyAllowed(chatId, 'operator')) {
       try {
         await api.sendMessage(chatId, OPERATOR_REPLY, { business_connection_id: bcId });
       } catch (e) {
