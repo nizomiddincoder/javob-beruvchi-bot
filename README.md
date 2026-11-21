@@ -2,12 +2,23 @@
 
 Mijoz biznes akkauntingizga yozganda bot uning matnini qidiruv API'ga yuboradi va:
 
-- **mahsulot topilsa** — har bir mahsulotni alohida xabar qilib yuboradi: nomi, narxi, mavjudligi va
-  `Buyurtma berish` tugmasi (`https://t.me/<BUYURTMA_BOT_USERNAME>?start=product_<ID>`);
+- **mahsulot topilsa** — har bir mahsulotni alohida xabar qilib yuboradi: rasmi, nomi, tavsifi, narxi,
+  mavjudligi va `Buyurtma berish` tugmasi (`https://t.me/<BUYURTMA_BOT_USERNAME>?start=product_<ID>`);
 - **hech narsa topilmasa** — mijozga "Operator tez orada javob beradi" deb yozadi va mijoz xabarini
   `ADMIN_CHAT_ID` ga yuboradi.
 
 Bot bazaga ulanmaydi va AI ishlatmaydi — faqat `GET {SEARCH_API_URL}/search?q=...` (sarlavha: `X-API-Key`).
+
+## Qidiruv API javobi
+
+```json
+[{ "id": 12, "name": "Kinder Bueno", "price": 12500, "available": true,
+   "image": "/uploads/products/abc.webp", "description": "Yong'oqli sutli shokolad" }]
+```
+
+`image` va `description` ixtiyoriy. `image` bo'lsa, mahsulot rasm bilan yuboriladi. Rasm qidiruv API
+serveridan yuklab olinadi, JPEG'ga o'giriladi va Telegram'ga yuklanadi (WebP'ni Telegram rasm sifatida
+yaxshi qabul qilmaydi). Rasm yuborilmasa, mahsulot matn ko'rinishida yuboriladi.
 
 ## Qanday ishlaydi
 

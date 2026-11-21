@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { InputFile } from 'grammy';
+import sharp from 'sharp';
 import { loadConfig } from '../src/config.js';
 import { formatPrice, productText } from '../src/format.js';
 import { createHandlers } from '../src/handlers.js';
+import { createPhotoSource } from '../src/images.js';
 import { buildQueries, createSearch, keywords, normalizeResults } from '../src/search.js';
 
 const ENV = {
@@ -46,9 +49,25 @@ test('normalizeResults: noto\'g\'ri yozuvlar tashlanadi', () => {
     { id: 4, name: 'Milka', price: '9000' },
   ]);
   assert.deepEqual(r, [
-    { id: '12', name: 'Kinder', price: 12500, available: true },
-    { id: '4', name: 'Milka', price: 9000, available: null },
+    { id: '12', name: 'Kinder', price: 12500, available: true, image: null, description: '' },
+    { id: '4', name: 'Milka', price: 9000, available: null, image: null, description: '' },
   ]);
+});
+
+test('normalizeResults: rasm manzili to\'liq qilinadi, xavfli manzillar olib tashlanadi', () => {
+  const base = 'https://api.example.com/search';
+  const [a, b, c] = normalizeResults(
+    [
+      { id: 1, name: 'A', image: '/uploads/products/a.webp', description: '  Mazali  ' },
+      { id: 2, name: 'B', image: 'https://cdn.example.com/b.jpg' },
+      { id: 3, name: 'C', image: 'javascript:alert(1)' },
+    ],
+    base,
+  );
+  assert.equal(a.image, 'https://api.example.com/uploads/products/a.webp');
+  assert.equal(a.description, 'Mazali');
+  assert.equal(b.image, 'https://cdn.example.com/b.jpg');
+  assert.equal(c.image, null);
 });
 
 function fakeFetch(db, calls) {
@@ -97,13 +116,41 @@ test('format: narx va kartochka', () => {
   assert.equal(formatPrice(null), null);
   assert.equal(
     productText({ name: 'A <b>&', price: 1500, available: false }),
-    "<b>A &lt;b&gt;&amp;</b>\nNarxi: 1 500 so'm\n❌ Hozircha mavjud emas",
+    "<b>A &lt;b&gt;&amp;</b>\n💰 Narxi: 1 500 so'm\n❌ Hozircha mavjud emas",
   );
+  assert.equal(
+    productText({ name: 'B', description: 'Sutli shokolad', price: 2000, available: true }),
+    "<b>B</b>\n\nSutli shokolad\n\n💰 Narxi: 2 000 so'm\n✅ Mavjud",
+  );
+  // Uzun tavsif rasm izohi chegarasiga (1024) sig'adi
+  const long = productText({ name: 'C'.repeat(100), description: 'so\'z '.repeat(500), price: 1, available: true });
+  assert.ok(long.length < 1024, String(long.length));
+});
+
+test('images: WebP yuklab olinib JPEG\'ga o\'giriladi, file_id eslab qolinadi', async () => {
+  const webp = await sharp({ create: { width: 50, height: 40, channels: 4, background: '#a0522d80' } }).webp().toBuffer();
+  let downloads = 0;
+  const src = createPhotoSource({
+    allowedOrigin: 'https://api.example.com',
+    fetchImpl: async () => {
+      downloads++;
+      return { ok: true, status: 200, arrayBuffer: async () => webp };
+    },
+  });
+  const url = 'https://api.example.com/uploads/a.webp';
+  const file = await src.get(url);
+  assert.ok(file instanceof InputFile);
+  const meta = await sharp(file.fileData).metadata();
+  assert.equal(meta.format, 'jpeg');
+  src.remember(url, { photo: [{ file_id: 'small' }, { file_id: 'big' }] });
+  assert.equal(await src.get(url), 'big');
+  assert.equal(downloads, 1);
+  await assert.rejects(() => src.get('https://evil.example.com/x.webp'), /boshqa serverda/);
 });
 
 // --- handlers ---
 
-function setup({ products = [], fail = false, apiError = null } = {}) {
+function setup({ products = [], fail = false, apiError = null, photos = null, photoError = null } = {}) {
   const sent = [];
   let t = 0;
   const api = {
@@ -111,13 +158,18 @@ function setup({ products = [], fail = false, apiError = null } = {}) {
       if (apiError && opts.reply_markup) throw apiError;
       sent.push({ chatId, text, opts });
     },
+    sendPhoto: async (chatId, photo, opts = {}) => {
+      if (photoError) throw photoError;
+      sent.push({ chatId, photo, opts });
+      return { photo: [{ file_id: `fid-${sent.length}` }] };
+    },
   };
   const searchProducts = async () => {
     if (fail) throw new Error('down');
     return products;
   };
   const silent = { info() {}, warn() {}, error() {} };
-  const h = createHandlers({ api, searchProducts, config: loadConfig(ENV), logger: silent, now: () => t });
+  const h = createHandlers({ api, searchProducts, config: loadConfig(ENV), photos, logger: silent, now: () => t });
   return { sent, h, advance: (ms) => (t += ms) };
 }
 
@@ -189,6 +241,46 @@ test('handler: rasm izohi ham qidiriladi', async () => {
   const { sent, h } = setup({ products: normalizeResults(DB).slice(0, 1) });
   await h.handleBusinessMessage(msg({ text: undefined, caption: 'shu bormi' }));
   assert.equal(sent.length, 1);
+});
+
+function fakePhotos() {
+  const log = { remembered: [], forgotten: [] };
+  return {
+    log,
+    get: async (url) => `file-for-${url}`,
+    remember: (url, msg) => log.remembered.push([url, msg.photo.at(-1).file_id]),
+    forget: (url) => log.forgotten.push(url),
+  };
+}
+
+const WITH_IMAGE = [
+  { id: '7', name: 'Kinder Bueno', description: 'Yong\'oqli', price: 12500, available: true, image: 'https://api.example.com/uploads/k.webp' },
+  { id: '8', name: 'Rasmsiz', description: '', price: 1000, available: true, image: null },
+];
+
+test('handler: rasmli mahsulot rasm + izoh + tugma bilan, rasmsizi matn bilan', async () => {
+  const photos = fakePhotos();
+  const { sent, h } = setup({ products: WITH_IMAGE, photos });
+  await h.handleBusinessMessage(msg());
+  assert.equal(sent.length, 2);
+  assert.equal(sent[0].photo, 'file-for-https://api.example.com/uploads/k.webp');
+  assert.equal(sent[0].opts.business_connection_id, 'bc1');
+  assert.match(sent[0].opts.caption, /Kinder Bueno[\s\S]*Yong'oqli[\s\S]*12 500 so'm/);
+  assert.equal(sent[0].opts.reply_markup.inline_keyboard[0][0].url, 'https://t.me/shokoladchi_bot?start=product_7');
+  assert.deepEqual(photos.log.remembered, [['https://api.example.com/uploads/k.webp', 'fid-1']]);
+  assert.equal(sent[1].photo, undefined);
+  assert.match(sent[1].text, /Rasmsiz/);
+});
+
+test('handler: rasm yuborilmasa matn + tugma yuboriladi', async () => {
+  const photos = fakePhotos();
+  const err = Object.assign(new Error('x'), { error_code: 400, description: 'Bad Request: IMAGE_PROCESS_FAILED' });
+  const { sent, h } = setup({ products: WITH_IMAGE.slice(0, 1), photos, photoError: err });
+  await h.handleBusinessMessage(msg());
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].text, /Kinder Bueno/);
+  assert.equal(sent[0].opts.reply_markup.inline_keyboard[0][0].text, 'Buyurtma berish');
+  assert.deepEqual(photos.log.forgotten, ['https://api.example.com/uploads/k.webp']);
 });
 
 test('handler: tugma rad etilsa havola matnda yuboriladi', async () => {

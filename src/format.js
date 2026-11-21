@@ -17,11 +17,23 @@ export function orderUrl(botUsername, productId) {
   return `https://t.me/${botUsername}?start=product_${productId}`;
 }
 
-/** Bitta mahsulot kartochkasi (HTML) */
+// Rasm izohi (caption) Telegram'da 1024 belgigacha; tavsifni shunga sig'diramiz
+const MAX_DESCRIPTION = 600;
+
+function shorten(s, max) {
+  const t = String(s || '').replace(/\n{3,}/g, '\n\n').trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
+/** Bitta mahsulot kartochkasi (HTML): nomi, tavsifi, narxi, mavjudligi */
 export function productText(p) {
   const lines = [`<b>${escapeHtml(p.name)}</b>`];
+  if (p.description) lines.push('', escapeHtml(shorten(p.description, MAX_DESCRIPTION)), '');
   const price = formatPrice(p.price);
-  if (price) lines.push(`Narxi: ${price}`);
+  if (price) lines.push(`💰 Narxi: ${price}`);
   if (p.available === true) lines.push('✅ Mavjud');
   else if (p.available === false) lines.push('❌ Hozircha mavjud emas');
   return lines.join('\n');

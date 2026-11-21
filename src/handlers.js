@@ -7,8 +7,9 @@ import { OPERATOR_REPLY, ORDER_BUTTON, adminText, orderUrl, productText } from '
  * @param {{ sendMessage: Function }} deps.api       grammY bot.api (yoki test uchun soxta obyekt)
  * @param {Function} deps.searchProducts             (text) => Promise<Product[]>
  * @param {object} deps.config                       loadConfig() natijasi
+ * @param {object} [deps.photos]                     createPhotoSource() — bo'lmasa rasmlar yuborilmaydi
  */
-export function createHandlers({ api, searchProducts, config, logger = console, now = () => Date.now() }) {
+export function createHandlers({ api, searchProducts, config, photos = null, logger = console, now = () => Date.now() }) {
   // Bir mijozga "Operator tez orada javob beradi" ni ketma-ket ko'p marta yubormaslik uchun
   const lastOperatorReply = new Map();
 
@@ -27,12 +28,29 @@ export function createHandlers({ api, searchProducts, config, logger = console, 
 
   async function sendProduct(chatId, businessConnectionId, p) {
     const url = orderUrl(config.orderBotUsername, p.id);
+    const reply_markup = { inline_keyboard: [[{ text: ORDER_BUTTON, url }]] };
+
+    // Rasm bo'lsa — rasm + izoh + tugma. Rasm yuborilmasa — pastdagi matnli variant
+    if (p.image && photos) {
+      try {
+        const photo = await photos.get(p.image);
+        const sent = await api.sendPhoto(chatId, photo, {
+          business_connection_id: businessConnectionId,
+          caption: productText(p),
+          parse_mode: 'HTML',
+          reply_markup,
+        });
+        photos.remember(p.image, sent);
+        return;
+      } catch (e) {
+        photos.forget(p.image);
+        logger.warn(`Rasm yuborilmadi (mahsulot ${p.id}): ${e?.description ?? e?.message ?? e}. Matn yuboriladi`);
+      }
+    }
+
     const base = { business_connection_id: businessConnectionId, parse_mode: 'HTML', link_preview_options: { is_disabled: true } };
     try {
-      await api.sendMessage(chatId, productText(p), {
-        ...base,
-        reply_markup: { inline_keyboard: [[{ text: ORDER_BUTTON, url }]] },
-      });
+      await api.sendMessage(chatId, productText(p), { ...base, reply_markup });
     } catch (e) {
       // Ehtiyot chorasi: tugma rad etilsa — havolani matn ichida yuboramiz
       if (e?.error_code === 400 && /button|markup|keyboard/i.test(e?.description ?? '')) {

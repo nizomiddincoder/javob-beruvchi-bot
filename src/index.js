@@ -1,6 +1,7 @@
 import { Bot, GrammyError, HttpError } from 'grammy';
 import { loadConfig } from './config.js';
 import { createHandlers } from './handlers.js';
+import { createPhotoSource } from './images.js';
 import { createSearch } from './search.js';
 
 let config;
@@ -20,7 +21,10 @@ const searchProducts = createSearch({
   maxResults: config.maxResults,
 });
 
-const { handleBusinessMessage } = createHandlers({ api: bot.api, searchProducts, config });
+// Rasmlar faqat qidiruv API serveridan yuklab olinadi
+const photos = createPhotoSource({ allowedOrigin: new URL(config.searchApiUrl).origin });
+
+const { handleBusinessMessage } = createHandlers({ api: bot.api, searchProducts, config, photos });
 
 // Mijoz biznes akkauntga yozgan xabar
 bot.on('business_message', (ctx) => handleBusinessMessage(ctx.businessMessage));

@@ -66,8 +66,22 @@ export function buildQueries(text) {
     .filter((stage) => stage.length);
 }
 
-/** API javobini tekshirib, toza ro'yxatga aylantiradi. Noto'g'ri yozuvlar tashlab yuboriladi. */
-export function normalizeResults(data) {
+/** "/uploads/a.webp" -> "https://api.example.com/uploads/a.webp"; faqat http(s) */
+function absoluteImageUrl(raw, baseUrl) {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  try {
+    const u = new URL(raw.trim(), baseUrl);
+    return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * API javobini tekshirib, toza ro'yxatga aylantiradi. Noto'g'ri yozuvlar tashlab yuboriladi.
+ * Ixtiyoriy maydonlar: image (to'liq yoki "/uploads/..." ko'rinishidagi manzil), description.
+ */
+export function normalizeResults(data, baseUrl = 'http://localhost') {
   const list = Array.isArray(data) ? data : data?.items ?? data?.results ?? data?.products ?? [];
   if (!Array.isArray(list)) return [];
   const out = [];
@@ -84,6 +98,8 @@ export function normalizeResults(data) {
       name,
       price: Number.isFinite(priceNum) ? priceNum : null,
       available: typeof it.available === 'boolean' ? it.available : null,
+      image: absoluteImageUrl(it.image, baseUrl),
+      description: typeof it.description === 'string' ? it.description.trim() : '',
     });
   }
   return out;
@@ -113,7 +129,7 @@ export function createSearch({ apiUrl, apiKey, timeoutMs, maxResults, fetchImpl 
     } catch {
       throw new SearchError('Qidiruv API JSON qaytarmadi');
     }
-    return normalizeResults(data);
+    return normalizeResults(data, endpoint);
   }
 
   /** Mijoz matni bo'yicha mahsulotlar (maxResults tagacha, takrorsiz) */
