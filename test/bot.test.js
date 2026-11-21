@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { InputFile } from 'grammy';
 import sharp from 'sharp';
 import { loadConfig } from '../src/config.js';
-import { formatPrice, productText } from '../src/format.js';
+import { OPERATOR_REPLY, formatPrice, productText } from '../src/format.js';
 import { createHandlers } from '../src/handlers.js';
 import { createPhotoSource } from '../src/images.js';
 import { buildQueries, createSearch, keywords, normalizeResults } from '../src/search.js';
@@ -33,6 +33,8 @@ test('keywords: salomlashish va savol so\'zlari olib tashlanadi', () => {
   assert.deepEqual(keywords('Assalomu alaykum, Kinder bormi? Narxi qancha'), ['kinder']);
   assert.deepEqual(keywords('Snickers va Twix bormi'), ['snickers', 'twix']);
   assert.deepEqual(keywords('привет, сколько стоит Milka?'), ['milka']);
+  assert.deepEqual(keywords('Kinder buyurtma qilmoqchiman'), ['kinder']);
+  assert.deepEqual(keywords('2 ta snickers zakaz qilsam bo\'ladimi'), ['snickers']);
 });
 
 test('buildQueries: bosqichlar', () => {
@@ -150,7 +152,7 @@ test('images: WebP yuklab olinib JPEG\'ga o\'giriladi, file_id eslab qolinadi', 
 
 // --- handlers ---
 
-function setup({ products = [], fail = false, apiError = null, photos = null, photoError = null } = {}) {
+function setup({ products = [], fail = false, apiError = null, photos = null, photoError = null, greet = false } = {}) {
   const sent = [];
   let t = 0;
   const api = {
@@ -174,7 +176,7 @@ function setup({ products = [], fail = false, apiError = null, photos = null, ph
     return products;
   };
   const silent = { info() {}, warn() {}, error() {} };
-  const h = createHandlers({ api, searchProducts, config: loadConfig(ENV), photos, logger: silent, now: () => t });
+  const h = createHandlers({ api, searchProducts, config: loadConfig(ENV), photos, greet, logger: silent, now: () => t });
   return { sent, h, advance: (ms) => (t += ms) };
 }
 
@@ -215,7 +217,7 @@ test('handler: topilmasa — mijozga operator javobi, adminga xabar', async () =
   const { sent, h } = setup();
   await h.handleBusinessMessage(msg({ text: 'Yetkazib berish <bormi>?' }));
   assert.equal(sent.length, 2);
-  assert.deepEqual(sent[0], { chatId: 555, text: 'Operator tez orada javob beradi', opts: { business_connection_id: 'bc1' } });
+  assert.deepEqual(sent[0], { chatId: 555, text: OPERATOR_REPLY, opts: { business_connection_id: 'bc1' } });
   assert.equal(sent[1].chatId, '999');
   assert.equal(sent[1].opts.business_connection_id, undefined);
   assert.match(sent[1].text, /topilmadi/);
@@ -236,7 +238,7 @@ test('handler: operator javobi cooldown bilan, admin har safar oladi', async () 
 test('handler: qidiruv xatosida ham operator javobi va admin ogohlantiriladi', async () => {
   const { sent, h } = setup({ fail: true });
   await h.handleBusinessMessage(msg());
-  assert.equal(sent[0].text, 'Operator tez orada javob beradi');
+  assert.equal(sent[0].text, OPERATOR_REPLY);
   assert.match(sent[1].text, /Qidiruv API ishlamadi/);
 });
 

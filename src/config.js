@@ -47,6 +47,8 @@ export function loadConfig(env = process.env) {
     // Ixtiyoriy sozlamalar (qiymat berilmasa — standart)
     maxResults: intEnv(env, 'MAX_RESULTS', 5, 1, 10),
     operatorReplyCooldownSec: intEnv(env, 'OPERATOR_REPLY_COOLDOWN_SECONDS', 300, 0, 86400),
+    // Salomlashish bir mijozga necha soniyada bir marta (standart 12 soat; 0 — har bir xabarga)
+    greetingCooldownSec: intEnv(env, 'GREETING_COOLDOWN_SECONDS', 43200, 0, 604800),
     searchTimeoutMs: intEnv(env, 'SEARCH_TIMEOUT_MS', 8000, 1000, 60000),
   };
 }

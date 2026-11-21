@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import { loadConfig } from '../src/config.js';
 import { createHandlers } from '../src/handlers.js';
-import { matchRules, normalize, parseRules } from '../src/rules.js';
+import { OPERATOR_REPLY } from '../src/format.js';
+import { isOrderIntent, matchRules, normalize, parseRules } from '../src/rules.js';
 
 const RULES = parseRules({
   qoidalar: [
@@ -29,6 +30,13 @@ test('matchRules: kalit so\'z va so\'z boshi bo\'yicha', () => {
   // 3 harfli kalit so'z faqat butun so'z bo'lsa
   assert.deepEqual(names('optom bormi'), []);
   assert.deepEqual(names('opt narx'), ['Qisqa']);
+});
+
+test('isOrderIntent: buyurtma so\'zlari', () => {
+  for (const t of ['Buyurtma bermoqchiman', 'buyurtmani qanday beraman?', 'zakaz qilsam', 'Хочу заказать', 'sotib olmoqchiman', 'купить можно?']) {
+    assert.ok(isOrderIntent(t), t);
+  }
+  for (const t of ['salom', 'ish vaqti qanday', 'kinder bormi']) assert.ok(!isOrderIntent(t), t);
 });
 
 test('parseRules: xatolar aniq aytiladi', () => {
@@ -62,6 +70,7 @@ function setup(products = []) {
     searchProducts: async () => products,
     config: loadConfig(ENV),
     getRules: () => RULES,
+    greet: false,
     logger: silent,
     now: () => t,
   });
@@ -89,7 +98,7 @@ test('handler: hech narsa mos kelmasa — operator javobi va adminga xabar', asy
   const { sent, h } = setup();
   await h.handleBusinessMessage(msg('qandaydir savol'));
   assert.deepEqual(sent.map((s) => s.chatId), [5, '999']);
-  assert.equal(sent[0].text, 'Operator tez orada javob beradi');
+  assert.equal(sent[0].text, OPERATOR_REPLY);
   assert.match(sent[1].text, /qandaydir savol/);
 });
 

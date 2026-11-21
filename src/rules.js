@@ -72,6 +72,15 @@ function keyMatches(text, key) {
   return key.length <= 3 ? padded.includes(` ${key} `) : padded.includes(` ${key}`);
 }
 
+// Mijoz buyurtma bermoqchi ekanini bildiruvchi so'zlar (so'z boshi bo'yicha: "buyurtma" -> "buyurtmani")
+const ORDER_WORDS = ['buyurtm', 'zakaz', 'olmoqchi', 'sotib ol', 'xarid', 'oformit', 'купить', 'хочу взять'].map(normalize);
+
+/** "Buyurtma bermoqchiman", "zakaz qilsam bo'ladimi", "заказать" ... */
+export function isOrderIntent(text) {
+  const t = normalize(text);
+  return !!t && ORDER_WORDS.some((w) => ` ${t} `.includes(` ${w}`));
+}
+
 /** Xabarga mos qoidalar (fayldagi tartibda, eng ko'pi bilan `limit` ta) */
 export function matchRules(rules, text, limit = 3) {
   const t = normalize(text);

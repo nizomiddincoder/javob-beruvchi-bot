@@ -1,14 +1,16 @@
 import {
   OPERATOR_REPLY,
   ORDER_BUTTON,
+  ORDER_PROMPT,
   adminText,
   botUrl,
+  greetingText,
   escapeHtml,
   orderUrl,
   productListText,
   productText,
 } from './format.js';
-import { matchRules } from './rules.js';
+import { isOrderIntent, matchRules } from './rules.js';
 
 /**
  * business_message ishlovchisi. Telegram API va qidiruv tashqaridan beriladi — test qilish oson.
@@ -26,14 +28,15 @@ export function createHandlers({
   config,
   photos = null,
   getRules = () => [],
+  greet = true,
   logger = console,
   now = () => Date.now(),
 }) {
   // Bir mijozga bir xil tayyor javobni (operator javobi yoki qoida) ketma-ket ko'p marta yubormaslik uchun
   const lastReply = new Map();
 
-  function replyAllowed(chatId, key) {
-    const cooldownMs = config.operatorReplyCooldownSec * 1000;
+  function replyAllowed(chatId, key, cooldownSec = config.operatorReplyCooldownSec) {
+    const cooldownMs = cooldownSec * 1000;
     if (!cooldownMs) return true;
     const t = now();
     const mapKey = `${chatId}:${key}`;
@@ -144,6 +147,13 @@ export function createHandlers({
     const chatId = msg.chat.id;
     const bcId = msg.business_connection_id;
 
+    // 0. Salomlashish: "Assalomu alaykum, {ism}! ..." (bir mijozga GREETING_COOLDOWN_SECONDS da bir marta)
+    let greeted = false;
+    if (greet && replyAllowed(chatId, 'greeting', config.greetingCooldownSec)) {
+      await api.sendMessage(chatId, greetingText(msg.from), { business_connection_id: bcId });
+      greeted = true;
+    }
+
     // 1. Tayyor javoblar (javoblar.json): yetkazib berish, manzil, ish vaqti va h.k.
     const rules = matchRules(getRules(), text);
     for (const r of rules) {
@@ -168,10 +178,21 @@ export function createHandlers({
       return;
     }
 
-    // 3. Qoida ham, mahsulot ham topilmadi — operator javobi
     if (rules.length) return;
+
+    // 3. "Buyurtma bermoqchiman", lekin mahsulot nomi yo'q — nomini so'raymiz + buyurtma botiga tugma
+    if (!searchFailed && isOrderIntent(text)) {
+      if (replyAllowed(chatId, 'order')) {
+        logger.info(`chat ${chatId}: buyurtma niyati, mahsulot nomi so'raldi`);
+        await sendTextWithButtons(chatId, bcId, ORDER_PROMPT, [{ text: ORDER_BUTTON, url: botUrl(config.orderBotUsername) }]);
+      }
+      return;
+    }
+
+    // 4. Hech narsa topilmadi — "Tushunarli! Hozir aniqini bilib beraman" va savol adminga
     logger.info(`chat ${chatId}: javob topilmadi${searchFailed ? ' (qidiruv xatosi)' : ''}`);
-    if (replyAllowed(chatId, 'operator')) {
+    // Hozirgina salomlashib "qanday yordam bera olaman?" deb so'ralgan bo'lsa — bu javob ortiqcha
+    if (!greeted && replyAllowed(chatId, 'operator')) {
       try {
         await api.sendMessage(chatId, OPERATOR_REPLY, { business_connection_id: bcId });
       } catch (e) {

@@ -1,5 +1,25 @@
-export const OPERATOR_REPLY = 'Operator tez orada javob beradi';
+/** Javob topilmaganda mijozga (savol adminga yuboriladi) */
+export const OPERATOR_REPLY = '✅ Tushunarli! Hozir sizga aniqini bilib beraman ⏳';
 export const ORDER_BUTTON = 'Buyurtma berish';
+
+/** Mijoz buyurtma bermoqchi, lekin mahsulot nomini yozmagan */
+export const ORDER_PROMPT = [
+  '🛒 Albatta! Qaysi mahsulotni buyurtma qilmoqchisiz?',
+  '',
+  '✍️ Nomini yozing — rasmi va narxini darhol yuboraman.',
+  "👇 Yoki to'g'ridan-to'g'ri buyurtma bering:",
+].join('\n');
+
+/** Mijoz yozganda salomlashish (oddiy matn, HTML emas — ismni tozalash shart emas) */
+export function greetingText(from) {
+  const name = (from?.first_name || from?.username || '').trim();
+  return [
+    `Assalomu alaykum${name ? `, ${name}` : ''}! 👋`,
+    '',
+    '🍫 Shokoladchiga xush kelibsiz!',
+    '😊 Sizga qanday yordam bera olaman?',
+  ].join('\n');
+}
 
 export function escapeHtml(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -71,7 +91,7 @@ export function adminText({ from, text, searchFailed }) {
     .join(' · ');
   const body = text.length > MAX_FORWARD_TEXT ? `${text.slice(0, MAX_FORWARD_TEXT)}…` : text;
   const title = searchFailed
-    ? '⚠️ Qidiruv API ishlamadi — mijozga operator javobi yuborildi'
+    ? '⚠️ Qidiruv API ishlamadi — mijozga javob bering'
     : '🔔 Mijoz xabariga mos mahsulot topilmadi';
   return `${title}\n\n👤 ${who}\n💬 ${escapeHtml(body)}`;
 }

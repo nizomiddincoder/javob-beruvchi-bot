@@ -17,10 +17,14 @@ const STOPWORDS = new Set(
     'raxmat', 'nima', 'qachon', 'qayerda', 'qayerdan', 'uchun', 'bilan', 'ekan', 'edi', 'mumkinmi', 'mumkin',
     'olsam', 'olmoqchiman', 'olaman', 'beraman', 'berasizmi', 'bering', 'buyurtma', 'dostavka', 'yetkazib',
     'yetkazish', 'yana', 'hamma', 'qaysi', 'sotasizmi', 'sotiladimi', 'shu', 'ham', 'dona', 'aka', 'opa',
+    // buyurtma / xohish so'zlari ("kinder buyurtma qilmoqchiman" -> "kinder")
+    'buyurtmaga', 'buyurtmani', 'zakaz', 'zakazga', 'qilmoqchiman', 'qilmoqchi', 'qilaman', 'qilsam',
+    'qilsa', 'qilib', 'bermoqchiman', 'bermoqchi', 'olmoqchi', 'olib', 'sotib', 'xarid', 'kerakmi', 'xohlayman',
+    'hohlayman', 'istayman', "bo'ladimi", 'boladimi', 'bizga', 'bering', 'yuboring', 'jonatib', "jo'nating",
     // ruscha
     'привет', 'здравствуйте', 'добрый', 'день', 'вечер', 'утро', 'есть', 'сколько', 'стоит', 'цена', 'цены',
     'нужно', 'нужен', 'нужна', 'можно', 'пожалуйста', 'спасибо', 'вас', 'это', 'хочу', 'купить', 'заказать',
-    'доставка', 'какие', 'какой', 'почем', 'почём',
+    'доставка', 'какие', 'какой', 'почем', 'почём', 'заказ', 'заказа', 'взять', 'мне', 'нам', 'хотим',
   ].map((w) => w.replace(/[‘’ʻʼ`]/g, "'")),
 );
 

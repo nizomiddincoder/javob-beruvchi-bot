@@ -8,8 +8,10 @@ Mijoz biznes akkauntingizga yozganda bot uning matnini qidiruv API'ga yuboradi v
   ro'yxat albomdan keyingi xabarda keladi;
 - **bitta mahsulot topilsa** — bitta xabar: rasmi, nomi, tavsifi, narxi, mavjudligi va `Buyurtma berish` tugmasi,
   u buyurtma botida shu mahsulotni ochadi (`https://t.me/<BUYURTMA_BOT_USERNAME>?start=product_<ID>`);
-- **hech narsa topilmasa** — mijozga "Operator tez orada javob beradi" deb yozadi va mijoz xabarini
-  `ADMIN_CHAT_ID` ga yuboradi.
+- **mijoz buyurtma bermoqchi, lekin mahsulot nomini yozmagan** ("buyurtma bermoqchiman", "zakaz qilsam") —
+  mahsulot nomini so'raydi va buyurtma botiga `Buyurtma berish` tugmasini beradi;
+- **hech narsa topilmasa** — mijozga "✅ Tushunarli! Hozir sizga aniqini bilib beraman ⏳" deb yozadi va
+  mijoz xabarini `ADMIN_CHAT_ID` ga yuboradi.
 
 Bot bazaga ulanmaydi va AI ishlatmaydi — faqat `GET {SEARCH_API_URL}/search?q=...` (sarlavha: `X-API-Key`).
 
@@ -44,9 +46,26 @@ Yetkazib berish, manzil, ish vaqti, to'lov kabi savollarga bot `javoblar.json` d
   va apostrof farqi hisobga olinmaydi. "dostavka" kalit so'zi "Dostavkangiz bormi?" xabariga ham mos keladi.
 - 3 harfgacha qisqa kalit so'zlar faqat alohida so'z bo'lib kelsa mos keladi.
 - Bitta xabarga bir nechta qoida mos kelsa (eng ko'pi 3 ta), hammasi yuboriladi, keyin mahsulotlar.
-- Qoida yoki mahsulot topilsa, "Operator tez orada javob beradi" yuborilmaydi va adminga xabar bormaydi.
+- Qoida yoki mahsulot topilsa, "Tushunarli! Hozir sizga aniqini bilib beraman" yuborilmaydi va adminga xabar bormaydi.
 - Faylni o'zgartirgach push qiling, Railway qayta deploy qiladi. Fayl xato bo'lsa, servis ishga tushmaydi va
   logda qaysi qoida xatoligi yoziladi (`npm test` ham buni tekshiradi).
+
+## Salomlashish
+
+Mijoz yozganda bot avval salomlashadi:
+
+```
+Assalomu alaykum, {ism}! 👋
+
+🍫 Shokoladchiga xush kelibsiz!
+😊 Sizga qanday yordam bera olaman?
+```
+
+`{ism}` — mijozning Telegram'dagi ismi (bo'lmasa username). Salomlashish bir mijozga 12 soatda bir marta
+yuboriladi (`GREETING_COOLDOWN_SECONDS`, `0` — har bir xabarga). Salomlashilgan xabarda mahsulot ham, tayyor
+javob ham topilmasa, "Tushunarli! Hozir sizga aniqini bilib beraman" yuborilmaydi, chunki bot hozirgina
+"qanday yordam bera olaman?" deb so'radi (adminga xabar baribir boradi). Mijozning keyingi xabarlariga shu
+javob beriladi. Matnlarni o'zgartirish: `src/format.js` → `greetingText`, `OPERATOR_REPLY`, `ORDER_PROMPT`.
 
 ## Qanday ishlaydi
 
@@ -55,9 +74,11 @@ Yetkazib berish, manzil, ish vaqti, to'lov kabi savollarga bot `javoblar.json` d
 - "Salom, kinder bormi?" kabi xabarlarda avval butun matn qidiriladi, topilmasa "salom", "bormi" kabi
   so'zlarsiz qayta qidiriladi, keyin har bir so'z alohida qidiriladi.
 - Ro'yxatda eng ko'pi bilan `MAX_RESULTS` (standart 5, ko'pi bilan 10) ta mahsulot bo'ladi.
-- "Operator tez orada javob beradi" va har bir tayyor javob bir mijozga 5 daqiqada bir martadan ko'p
-  yuborilmaydi (`OPERATOR_REPLY_COOLDOWN_SECONDS`). Adminga esa har bir javobsiz qolgan xabar boradi.
-- Qidiruv API ishlamay qolsa ham mijozga operator javobi yuboriladi, adminga esa "Qidiruv API ishlamadi" deb boradi.
+- "Kinder buyurtma qilmoqchiman" kabi gaplardan buyurtma so'zlari olib tashlanib, mahsulot nomi qidiriladi.
+- "Tushunarli! Hozir sizga aniqini bilib beraman", buyurtma so'rovi va har bir tayyor javob bir mijozga
+  5 daqiqada bir martadan ko'p yuborilmaydi (`OPERATOR_REPLY_COOLDOWN_SECONDS`). Adminga esa har bir javobsiz
+  qolgan xabar boradi.
+- Qidiruv API ishlamay qolsa ham mijozga "Tushunarli! ..." javobi yuboriladi, adminga esa "Qidiruv API ishlamadi" deb boradi.
 
 ## Railway'ga qo'yish
 
